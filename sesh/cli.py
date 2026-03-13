@@ -301,10 +301,12 @@ def main() -> None:
     # reflect
     reflect_p = sub.add_parser("reflect", help="Analyze a session")
     reflect_p.add_argument("session_id", nargs="?", help="Session ID (default: most recent)")
+    reflect_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     # report
     report_p = sub.add_parser("report", help="Cross-session trend analysis")
     report_p.add_argument("--last", type=int, help="Number of sessions to analyze")
+    report_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     # handoff
     handoff_p = sub.add_parser("handoff", help="Generate handoff summary")
@@ -314,13 +316,16 @@ def main() -> None:
     search_p = sub.add_parser("search", help="Full-text search across sessions")
     search_p.add_argument("query", help="Search query")
     search_p.add_argument("--limit", type=int, default=10, help="Max results")
+    search_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     # list
     list_p = sub.add_parser("list", help="List logged sessions")
     list_p.add_argument("--last", type=int, help="Number of sessions to show")
+    list_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     # stats
-    sub.add_parser("stats", help="Aggregate statistics dashboard")
+    stats_p = sub.add_parser("stats", help="Aggregate statistics dashboard")
+    stats_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     # export
     export_p = sub.add_parser("export", help="Export session data as JSON")
