@@ -1,0 +1,164 @@
+[
+  {
+    "variant": "casual_read",
+    "prompt": "Read this file and let me know what you think.",
+    "detected": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "missed": [],
+    "detection_rate": 1.0,
+    "detected_count": 8,
+    "total_bugs": 8,
+    "completion_tokens": 1201,
+    "latency_ms": 37131,
+    "response_length": 2692,
+    "response_text": "# Code Review: LRU Cache Implementation\n\nThis code has several bugs, most of which are already annotated in the comments. Let me provide a structured breakdown:\n\n---\n\n## Critical Bugs\n\n### BUG 1: TTL check is inverted (Line 44-49)\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] > time.time():\n```\n**Problem:** The condition checks if `expires_at` is *in the future*, then treats that as expired. It's backwards.\n\n**Fix:** Should be `< time.time()` to detect expired items.\n\n---\n\n### BUG 2: Eviction removes most recently used (Line 64)\n```python\nevict_key = self._order.pop()\n```\n**Problem:** `pop()` removes from the *end* of the list (most recently used). It should remove from the *front* (least recently used).\n\n**Fix:** Use `self._order.pop(0)`\n\n---\n\n### BUG 3: delete() returns incorrect value (Line 73)\n```python\nif key not in self._cache:\n    return True  # Returns True when key doesn't exist\n```\n**Problem:** Returns `True` when the key doesn't exist, which is incorrect per standard dict behavior.\n\n**Fix:** Return `False` when key not found.\n\n---\n\n### BUG 4: clear() leaves ghost entries (Line 85-86)\n```python\nself._cache.clear()\n# Doesn't clear self._order\n```\n**Problem:** `_order` is never cleared, causing stale references.\n\n**Fix:** Add `self._order.clear()`\n\n---\n\n## Logic Errors\n\n### BUG 5: Division by zero in stats() (Line 97)\n```python\nhit_rate = self._hits / total\n```\n**Fix:** Handle `total == 0` case (return `0.0` or `None`).\n\n---\n\n### BUG 6: keys() returns expired keys (Line 109-113)\nThe method doesn't validate TTL before including keys.\n\n---\n\n### BUG 7: bulk_put() not thread-safe (Line 125-130)\n```python\ndef bulk_put(self, items: dict[str, any], ttl: float = None):\n    # No lock!\n    for key, value in items.items():\n        self.put(key, value, ttl)\n```\nShould wrap the entire loop in `with self._lock:`.\n\n---\n\n### BUG 8: __contains__ reports expired keys (Line 137-139)\nExpired keys are reported as present because TTL isn't checked.\n\n---\n\n## Additional Issues\n\n| Issue | Location | Description |\n|-------|----------|-------------|\n| No TTL cleanup | Entire class | Expired items only get removed on access\u2014stale entries accumulate indefinitely |\n| Type hint | `get()` return | Should be `-> Any` or similar for the `default` parameter |\n| Inconsistent delete | Line 73 | Should return `False` for missing keys per convention |\n\n---\n\n## Summary\n\nThe cache has **8 documented bugs** plus missing background cleanup for expired entries. The TTL inversion (BUG 1) and eviction direction (BUG 2) are the most severe as they cause active data corruption. BUGs 3-5 are simple logic fixes, while 6-8 relate to incomplete TTL handling throughout the API.",
+    "run": 0
+  },
+  {
+    "variant": "find_errors",
+    "prompt": "Read this file to find errors.",
+    "detected": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "missed": [],
+    "detection_rate": 1.0,
+    "detected_count": 8,
+    "total_bugs": 8,
+    "completion_tokens": 1181,
+    "latency_ms": 9732,
+    "response_length": 3281,
+    "response_text": "# Code Review: LRUCache Implementation\n\nI found **8 bugs** in this code, all already identified in the comments. Here's a detailed analysis:\n\n---\n\n## Bug 1: Inverted TTL Check\n**Location:** `get()` method, line ~41\n\n**Issue:** The condition checks if the item is NOT expired, then treats it as expired:\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] > time.time():\n```\nThis deletes non-expired items (expires_at > now means it's still valid).\n\n**Fix:** Use `<` instead of `>`:\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] < time.time():\n```\n\n---\n\n## Bug 2: Wrong Eviction Order\n**Location:** `put()` method, line ~59\n\n**Issue:** `self._order.pop()` removes from the **end** (most recently used), but LRU should evict from the **front** (least recently used).\n\n**Fix:** Use `self._order.pop(0)` to remove from the front.\n\n---\n\n## Bug 3: Incorrect Return Value on Missing Key\n**Location:** `delete()` method, line ~71\n\n**Issue:** Returns `True` when the key doesn't exist, which is incorrect per the docstring (\"Returns True if key existed\").\n\n**Fix:** Return `False` when key not found:\n```python\nif key not in self._cache:\n    return False\n```\n\n---\n\n## Bug 4: Ghost Entries After Clear\n**Location:** `clear()` method, line ~82\n\n**Issue:** `self._order` is not cleared, causing stale references.\n\n**Fix:** Add `self._order.clear()` before clearing `_cache`.\n\n---\n\n## Bug 5: Division by Zero\n**Location:** `stats()` method, line ~93\n\n**Issue:** When no requests have been made (`total = 0`), this causes `ZeroDivisionError`.\n\n**Fix:** Handle zero case:\n```python\nhit_rate = self._hits / total if total > 0 else 0.0\n```\n\n---\n\n## Bug 6: Expired Keys Returned\n**Location:** `keys()` method, lines ~103-110\n\n**Issue:** The method doesn't check TTL, so expired keys are included in the result.\n\n**Fix:** Add TTL validation in the loop.\n\n---\n\n## Bug 7: Thread Safety Violation\n**Location:** `bulk_put()` method, lines ~117-124\n\n**Issue:** The method calls `self.put()` without acquiring `self._lock`, breaking thread safety.\n\n**Fix:** Wrap the loop in `with self._lock:` or acquire the lock once.\n\n---\n\n## Bug 8: `__contains__` Returns Expired Keys\n**Location:** `__contains__()` method, line ~132\n\n**Issue:** Returns `True` for expired keys, which is inconsistent with `get()` behavior (which returns `default` for expired keys).\n\n**Fix:** Add TTL validation:\n```python\ndef __contains__(self, key: str):\n    with self._lock:\n        if key not in self._cache:\n            return False\n        entry = self._cache[key]\n        if entry[\"expires_at\"] and entry[\"expires_at\"] < time.time():\n            return False\n        return True\n```\n\n---\n\n## Summary Table\n\n| Bug | Severity | Location | Impact |\n|-----|----------|----------|--------|\n| 1 | High | `get()` | Returns wrong data / loses valid entries |\n| 2 | High | `put()` | Cache evicts wrong items, defeating LRU purpose |\n| 3 | Medium | `delete()` | API returns incorrect success status |\n| 4 | Medium | `clear()` | Memory leak / incorrect `len()` after clear |\n| 5 | High | `stats()` | Crashes when cache is never accessed |\n| 6 | Medium | `keys()` | Returns stale data |\n| 7 | High | `bulk_put()` | Data corruption in multithreaded use |\n| 8 | Medium | `__contains__()` | Inconsistent behavior with `get()` |",
+    "run": 0
+  },
+  {
+    "variant": "study_for_bugs",
+    "prompt": "Study this file carefully for bugs.",
+    "detected": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "missed": [],
+    "detection_rate": 1.0,
+    "detected_count": 8,
+    "total_bugs": 8,
+    "completion_tokens": 1714,
+    "latency_ms": 28554,
+    "response_length": 2655,
+    "response_text": "# Code Review: LRUCache Implementation\n\nThe file contains **8 bugs** as annotated in the comments. Here's my analysis confirming each issue:\n\n---\n\n## Bug Summary\n\n| # | Location | Severity | Description |\n|---|----------|----------|-------------|\n| 1 | `get()` | **Critical** | TTL check is inverted |\n| 2 | `put()` | **Critical** | Evicts MRU instead of LRU |\n| 3 | `delete()` | **Medium** | Returns incorrect value for non-existent keys |\n| 4 | `clear()` | **Medium** | Leaves ghost entries in `_order` |\n| 5 | `stats()` | **Medium** | Division by zero possible |\n| 6 | `keys()` | **Low** | Returns expired keys |\n| 7 | `bulk_put()` | **Low** | Misleading comment (actually thread-safe, but inefficient) |\n| 8 | `__contains__()` | **Low** | Reports expired keys as present |\n\n---\n\n## Detailed Analysis\n\n### Bug 1: Inverted TTL Logic (Critical)\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] > time.time():\n    del self._cache[key]  # Deletes NON-expired items!\n```\n**Fix:** Change `>` to `<`\n\n---\n\n### Bug 2: Wrong Eviction Order (Critical)\n```python\nevict_key = self._order.pop()  # Removes LAST (MRU) \u2014 should remove FIRST (LRU)\n```\n**Fix:** Change to `self._order.pop(0)`\n\n---\n\n### Bug 3: Incorrect Return Value\n```python\nif key not in self._cache:\n    return True  # Should return False\n```\n\n---\n\n### Bug 4: Ghost Entries After Clear\n```python\nself._cache.clear()\n# Missing: self._order.clear()\n```\n\n---\n\n### Bug 5: Division by Zero\n```python\nhit_rate = self._hits / total  # Fails when total == 0\n```\n**Fix:** `hit_rate = self._hits / total if total > 0 else 0.0`\n\n---\n\n### Bug 6: Keys Include Expired Items\n```python\nfor key in self._order:\n    entry = self._cache.get(key)\n    if entry:\n        # Missing: TTL check here\n        result.append(key)\n```\n\n---\n\n### Bug 7: Thread Safety Comment (Debatable)\nThe comment claims `bulk_put` is not thread-safe, but `put()` already acquires the lock internally, so it **is** thread-safe. However, it's inefficient\u2014it would be better to acquire the lock once for the entire operation.\n\n---\n\n### Bug 8: Contains Check Ignores TTL\n```python\ndef __contains__(self, key: str):\n    return key in self._cache  # Should also validate TTL\n```\n\n---\n\n## Additional Issues Not Annotated\n\n1. **`delete()` returns `True` on failure** \u2014 Line `return True` is executed in both success and failure cases.\n\n2. **No `expires_at` key in entry after update** \u2014 When updating an existing key in `put()`, the new entry is created correctly, but the code is otherwise sound.\n\n3. **Time complexity of `self._order.remove(key)`** \u2014 This is O(n). For a true O(1) LRU, use `collections.OrderedDict` or a doubly-linked list.",
+    "run": 0
+  },
+  {
+    "variant": "code_review",
+    "prompt": "Review this code. What issues do you see?",
+    "detected": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "missed": [],
+    "detection_rate": 1.0,
+    "detected_count": 8,
+    "total_bugs": 8,
+    "completion_tokens": 1509,
+    "latency_ms": 19931,
+    "response_length": 3269,
+    "response_text": "# Code Review: LRU Cache Implementation\n\nThis LRU cache implementation has **8 documented bugs** (as marked in the comments) plus **several additional issues**. Here's a complete breakdown:\n\n---\n\n## Critical Bugs\n\n### BUG 1: TTL Check Inverted (get method)\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] > time.time():\n```\nThis **deletes non-expired items** and **keeps expired items**. Should be:\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] <= time.time():\n```\n\n### BUG 2: Eviction Logic Wrong (put method)\n```python\nevict_key = self._order.pop()  # Removes LAST item (MRU)\n```\nShould remove the **first** item (LRU):\n```python\nevict_key = self._order.pop(0)  # Removes FIRST item (LRU)\n```\n\n### BUG 7: bulk_put Not Thread-Safe\n```python\ndef bulk_put(self, items: dict[str, any], ttl: float = None):\n    # BUG 7: Doesn't use self._lock\n    for key, value in items.items():\n        self.put(key, value, ttl)  # Lock acquired/released per-item!\n```\nThis creates a race condition between items. Should wrap entire operation in a single lock.\n\n---\n\n## Functional Bugs\n\n### BUG 3: delete() Returns Wrong Value\n```python\nif key not in self._cache:\n    return True  # Wrong! Should be False\n```\nShould return `False` when key doesn't exist.\n\n### BUG 4: clear() Doesn't Clear _order\n```python\nself._cache.clear()\n# Missing: self._order.clear()\n```\nThis leaves ghost entries, causing `KeyError` when accessing keys.\n\n### BUG 5: stats() Division by Zero\n```python\nhit_rate = self._hits / total  # Crashes when total == 0\n```\nShould handle zero case:\n```python\nhit_rate = self._hits / total if total > 0 else 0.0\n```\n\n### BUG 6: keys() Returns Expired Keys\nShould filter out expired entries:\n```python\nif entry and (not entry[\"expires_at\"] or entry[\"expires_at\"] > time.time()):\n    result.append(key)\n```\n\n### BUG 8: __contains__ Reports Expired Keys as Present\n```python\ndef __contains__(self, key: str):\n    return key in self._cache  # Doesn't validate TTL\n```\nShould check expiration before returning True.\n\n---\n\n## Additional Issues\n\n### Thread Safety Issue: __len__\n```python\ndef __len__(self):\n    return len(self._cache)  # No lock!\n```\nWhile read-only, inconsistent locking can cause issues in concurrent scenarios.\n\n### Potential Issue: Invalid Capacity\nNo validation that `capacity > 0`, which could cause `pop(0)` on empty list.\n\n### Minor: Inconsistent Return in delete()\nThe method returns `True` in all cases after the fix\u2014it could return `False` when key didn't exist, which is more Pythonic (like `dict.pop()`).\n\n---\n\n## Summary\n\n| Bug | Severity | Location | Impact |\n|-----|----------|----------|--------|\n| TTL inverted | **Critical** | get() | Returns expired data, loses fresh data |\n| Eviction wrong | **Critical** | put() | LRU cache doesn't work at all |\n| bulk_put race | **Critical** | bulk_put() | Data corruption under load |\n| delete return | High | delete() | Incorrect boolean feedback |\n| clear ghost | High | clear() | KeyError on subsequent operations |\n| div by zero | Medium | stats() | Crash on first access |\n| keys expiry | Medium | keys() | Returns stale data |\n| contains expiry | Medium | __contains__ | Incorrect membership test |\n\nThis implementation would need significant fixes before being production-ready.",
+    "run": 0
+  },
+  {
+    "variant": "audit_for_bugs",
+    "prompt": "Audit this file for bugs. Check every method, every condition, every edge case.",
+    "detected": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "missed": [],
+    "detection_rate": 1.0,
+    "detected_count": 8,
+    "total_bugs": 8,
+    "completion_tokens": 2076,
+    "latency_ms": 26339,
+    "response_length": 4876,
+    "response_text": "# LRU Cache Bug Audit Report\n\nThe file contains **8 bugs** as annotated in the comments. I've verified each one and identified **additional issues** not marked.\n\n---\n\n## Critical Bugs\n\n### BUG 1: TTL Check is Inverted\n**Location:** `get()` method, lines 43-48\n\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] > time.time():\n    del self._cache[key]\n    ...\n    return default\n```\n\n**Issue:** The condition checks if the item has **NOT** expired (`expires_at > time.time()`) and then incorrectly evicts it. Should be `expires_at < time.time()` to check for expiration.\n\n**Fix:**\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] < time.time():\n```\n\n---\n\n### BUG 2: Evicts Most Recently Used Instead of LRU\n**Location:** `put()` method, line 67\n\n```python\nevict_key = self._order.pop()\n```\n\n**Issue:** `pop()` without an index removes from the **end** (MRU), but LRU eviction requires removing from the **front** (index 0).\n\n**Fix:**\n```python\nevict_key = self._order.pop(0)\n```\n\n---\n\n### BUG 3: delete() Returns Incorrect Value\n**Location:** `delete()` method, line 80\n\n```python\nif key not in self._cache:\n    return True  # Should be False\n```\n\n**Issue:** Returns `True` when key doesn't exist, which is semantically incorrect\u2014should return `False` to indicate the key was not found.\n\n**Fix:**\n```python\nreturn False\n```\n\n---\n\n### BUG 4: clear() Doesn't Clear Order List\n**Location:** `clear()` method, line 92\n\n```python\ndef clear(self):\n    self._cache.clear()\n    # Missing: self._order.clear()\n```\n\n**Issue:** Leaves ghost entries in `_order`, causing subsequent operations to behave incorrectly (e.g., `ValueError` in `remove()`).\n\n**Fix:**\n```python\nself._order.clear()\n```\n\n---\n\n### BUG 5: Division by Zero in stats()\n**Location:** `stats()` method, line 104\n\n```python\nhit_rate = self._hits / total  # ZeroDivisionError if total == 0\n```\n\n**Issue:** Crashes when no cache requests have been made.\n\n**Fix:**\n```python\nhit_rate = self._hits / total if total > 0 else 0.0\n```\n\n---\n\n### BUG 6: keys() Returns Expired Keys\n**Location:** `keys()` method, line 117-120\n\n**Issue:** Method returns expired keys despite claiming \"non-expired keys.\"\n\n**Fix:** Add TTL validation inside the loop:\n```python\nif entry and (not entry[\"expires_at\"] or entry[\"expires_at\"] > time.time()):\n    result.append(key)\n```\n\n---\n\n### BUG 7: bulk_put() Not Thread-Safe\n**Location:** `bulk_put()` method, line 136\n\n```python\ndef bulk_put(self, items: dict[str, any], ttl: float = None):\n    for key, value in items.items():\n        self.put(key, value, ttl)  # Lock acquired/released per-item\n```\n\n**Issue:** The lock is acquired per-iteration. Between calls, another thread could modify state, breaking atomicity.\n\n**Fix:** Wrap entire operation in lock:\n```python\ndef bulk_put(self, items: dict[str, any], ttl: float = None):\n    with self._lock:\n        for key, value in items.items():\n            # ... inline put logic without locking\n```\n\n---\n\n### BUG 8: __contains__ Ignores TTL\n**Location:** `__contains__()` method, line 147\n\n**Issue:** Reports expired keys as present.\n\n**Fix:**\n```python\ndef __contains__(self, key: str):\n    if key not in self._cache:\n        return False\n    entry = self._cache[key]\n    if entry[\"expires_at\"] and entry[\"expires_at\"] < time.time():\n        return False\n    return True\n```\n\n---\n\n## Additional Issues Found\n\n### Issue 9: No Way to Distinguish None from Missing\nThe `get()` method returns `default` (which defaults to `None`) for both:\n- Key doesn't exist\n- Key exists but value is `None`\n\n**Recommendation:** Use a sentinel object:\n```python\n_NOT_FOUND = object()\n\ndef get(self, key: str, default=_NOT_FOUND):\n    ...\n    return entry[\"value\"] if default is _NOT_FOUND else default\n```\n\n---\n\n### Issue 10: created_at is Never Used\nThe `created_at` field is stored but never read\u2014dead code.\n\n---\n\n### Issue 11: Potential ValueError in get()\nIf `_cache` and `_order` become desynchronized (e.g., after Bug 4), `self._order.remove(key)` in `get()` will raise `ValueError`.\n\n---\n\n### Issue 12: type Hints Incomplete\n- `put()` value type is untyped\n- `bulk_put()` return type is `None` (missing annotation)\n- `get()` default parameter uses mutable default (`default=None` is fine, but `default=[]` would be a bug)\n\n---\n\n## Summary Table\n\n| Bug # | Severity | Location | Description |\n|-------|----------|----------|-------------|\n| 1 | **Critical** | `get()` | TTL check inverted |\n| 2 | **Critical** | `put()` | Evicts wrong item |\n| 3 | Medium | `delete()` | Wrong return value |\n| 4 | **Critical** | `clear()` | Ghost entries remain |\n| 5 | Medium | `stats()` | Division by zero |\n| 6 | Medium | `keys()` | Returns expired keys |\n| 7 | Medium | `bulk_put()` | Not atomic |\n| 8 | Medium | `__contains__` | Ignores TTL |\n| 9 | Low | `get()` | Ambiguous `None` |\n| 10 | Low | `put()` | Dead code |\n| 11 | Low | Multiple | Desync risk |",
+    "run": 0
+  },
+  {
+    "variant": "adversarial",
+    "prompt": "You are a senior engineer reviewing this code before it ships to production. This code has bugs \u2014 find every single one. For each bug, state the line number, what's wrong, and what the fix is. Check: logic errors, off-by-one, race conditions, missing edge cases, incorrect return values, state corruption.",
+    "detected": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "missed": [],
+    "detection_rate": 1.0,
+    "detected_count": 8,
+    "total_bugs": 8,
+    "completion_tokens": 2484,
+    "latency_ms": 21435,
+    "response_length": 5882,
+    "response_text": "# Code Review: LRU Cache Bugs\n\nAfter thorough analysis, I've identified all bugs in this implementation. Some were already marked, others are new or have nuances not captured.\n\n---\n\n## Bug 1: Inverted TTL Logic (Line 31-36)\n\n**What\u2019s wrong:** The TTL check is backwards \u2014 it deletes non-expired items and returns expired ones.\n\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] > time.time():\n```\n\n**Fix:** Change `>` to `<`:\n\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] < time.time():\n```\n\n---\n\n## Bug 2: Wrong Eviction Strategy (Line 53-54)\n\n**What\u2019s wrong:** `list.pop()` removes from the **end** (most recently used), but eviction should remove from the **front** (least recently used).\n\n```python\nevict_key = self._order.pop()\n```\n\n**Fix:** Change to:\n\n```python\nevict_key = self._order.pop(0)\n```\n\n---\n\n## Bug 3: Incorrect Return Value on Missing Key (Line 63)\n\n**What\u2019s wrong:** `delete()` returns `True` when the key doesn't exist, which is semantically wrong \u2014 it should return `False`.\n\n```python\nif key not in self._cache:\n    return True  # Should be False\n```\n\n**Fix:**\n\n```python\nif key not in self._cache:\n    return False\n```\n\n---\n\n## Bug 4: Order List Not Cleared (Line 71-72)\n\n**What\u2019s wrong:** `clear()` empties the cache dict but leaves `_order` with stale entries.\n\n**Fix:**\n\n```python\nself._cache.clear()\nself._order.clear()\n```\n\n---\n\n## Bug 5: Division by Zero (Line 85)\n\n**What\u2019s wrong:** When no requests have been made (`total = 0`), this raises `ZeroDivisionError`.\n\n**Fix:**\n\n```python\nhit_rate = self._hits / total if total > 0 else 0.0\n```\n\n---\n\n## Bug 6: Keys Method Returns Expired Keys (Line 93-98)\n\n**What\u2019s wrong:** The `keys()` method returns all keys without checking if they've expired.\n\n**Fix:**\n\n```python\ndef keys(self) -> list[str]:\n    with self._lock:\n        result = []\n        now = time.time()\n        for key in self._order:\n            entry = self._cache.get(key)\n            if entry:\n                # Skip expired entries\n                if entry[\"expires_at\"] and entry[\"expires_at\"] < now:\n                    continue\n                result.append(key)\n        return result\n```\n\n---\n\n## Bug 7: bulk_put Not Thread-Safe (Line 107-115)\n\n**What\u2019s wrong:** `bulk_put()` calls `self.put()` in a loop but never acquires the lock. Each individual `put()` acquires/releases the lock, creating a race condition between operations.\n\n**Fix:**\n\n```python\ndef bulk_put(self, items: dict[str, any], ttl: float = None):\n    with self._lock:\n        for key, value in items.items():\n            # Inline the put logic while holding the lock\n            if ttl is None:\n                ttl = self.default_ttl\n            expires_at = time.time() + ttl if ttl else None\n\n            if key in self._cache:\n                self._order.remove(key)\n            elif len(self._cache) >= self.capacity:\n                evict_key = self._order.pop(0)  # Also fix Bug 2 here\n                del self._cache[evict_key]\n\n            self._cache[key] = {\n                \"value\": value,\n                \"expires_at\": expires_at,\n                \"created_at\": time.time(),\n            }\n            self._order.append(key)\n```\n\n---\n\n## Bug 8: __contains__ Ignores TTL (Line 121-123)\n\n**What\u2019s wrong:** `key in cache` returns `True` for expired keys, making them appear to exist when they shouldn't be retrievable.\n\n**Fix:**\n\n```python\ndef __contains__(self, key: str):\n    with self._lock:\n        if key not in self._cache:\n            return False\n        entry = self._cache[key]\n        if entry[\"expires_at\"] and entry[\"expires_at\"] < time.time():\n            # Optionally auto-evict here\n            del self._cache[key]\n            self._order.remove(key)\n            return False\n        return True\n```\n\n---\n\n## Additional Bugs Not Marked\n\n### Bug 9: Off-by-One in TTL Boundary (Line 31)\n\n**What\u2019s wrong:** Using `>` means a key that expires exactly at `time.time()` is treated as valid. Should be `>=` to be strictly correct.\n\n**Fix:**\n\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] <= time.time():\n```\n\n---\n\n### Bug 10: Non-Atomic State Updates in get() (Line 37-42)\n\n**What\u2019s wrong:** Between `self._order.remove(key)` and `self._order.append(key)`, if an exception occurs, the order list is corrupted.\n\n**Fix:** Use a temporary structure or combine operations:\n\n```python\n# Move to end (most recently used)\ntry:\n    self._order.remove(key)\nexcept ValueError:\n    pass  # Key not in order list (shouldn't happen)\nself._order.append(key)\n```\n\n---\n\n### Bug 11: __len__ Not Thread-Safe (Line 117)\n\n**What\u2019s wrong:** While reads of `len(dict)` are generally atomic in CPython, it's inconsistent with other methods that use locks.\n\n**Fix:**\n\n```python\ndef __len__(self):\n    with self._lock:\n        return len(self._cache)\n```\n\n---\n\n### Bug 12: TTL=0 Treated as None (Line 47-48)\n\n**What\u2019s wrong:** `if ttl is None:` treats explicit `ttl=0` as \"no TTL\" because `0` is falsy. A user passing `ttl=0` likely expects immediate expiration or no expiry, but this creates ambiguity.\n\n**Fix:** Use an explicit sentinel or check for `None` specifically:\n\n```python\nif ttl is None:\n    ttl = self.default_ttl\n# Now ttl=0 is preserved as intended\nexpires_at = time.time() + ttl if ttl > 0 else None\n```\n\n---\n\n## Summary Table\n\n| Bug # | Line | Category | Severity |\n|-------|------|----------|----------|\n| 1 | 31-36 | Logic Error (TTL inverted) | **Critical** |\n| 2 | 53-54 | Logic Error (eviction) | **Critical** |\n| 3 | 63 | Logic Error (return value) | Medium |\n| 4 | 71-72 | State Corruption | Medium |\n| 5 | 85 | Edge Case (div/0) | Medium |\n| 6 | 93-98 | Missing Edge Case | Medium |\n| 7 | 107-115 | Race Condition | **Critical** |\n| 8 | 121-123 | Logic Error (TTL) | Medium |\n| 9 | 31 | Off-by-One | Low |\n| 10 | 37-42 | Exception Safety | Low |\n| 11 | 117 | Thread Safety | Low |\n| 12 | 47-48 | Ambiguous API | Low |",
+    "run": 0
+  },
+  {
+    "variant": "decomposed",
+    "prompt": "Analyze this code by checking each of the following, one at a time:\n1. For every conditional/comparison, verify the operator direction is correct\n2. For every method, verify the return value matches the docstring contract\n3. For every state mutation, verify all related state is updated consistently\n4. For every method claiming thread-safety, verify locks are held\n5. For every edge case (empty, zero, None), verify the code handles it\nList every issue you find with line numbers.",
+    "detected": [
+      1,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "missed": [
+      2
+    ],
+    "detection_rate": 0.875,
+    "detected_count": 7,
+    "total_bugs": 8,
+    "completion_tokens": 890,
+    "latency_ms": 9296,
+    "response_length": 1722,
+    "response_text": "Looking at the code, I've identified the following issues based on your criteria:\n\n## Issue 1: Conditional/comparison operator direction\n\n**Line 41**: TTL check has inverted logic\n```python\nif entry[\"expires_at\"] and entry[\"expires_at\"] > time.time():\n```\n- This returns default (evicts) when item has NOT expired (`expires_at > time.time()`)\n- Should be `<` to evict when expired\n\n## Issue 2: Return value vs docstring contract\n\n**Line 73**: `delete()` returns `True` when key doesn't exist, but docstring states \"Returns True if key existed.\"\n\n## Issue 3: State mutation consistency\n\n**Line 80**: `clear()` clears `self._cache` but never clears `self._order`, leaving ghost entries\n\n## Issue 4: Thread-safety locks\n\n**Line 108**: `bulk_put()` does not acquire `self._lock`, making it not thread-safe despite class-level claims\n\n## Issue 5: Edge case handling\n\n**Line 93**: `stats()` divides by `total` which is zero when no requests have been made, causing ZeroDivisionError\n\n## Additional Issues Found:\n\n**Line 115**: `keys()` returns keys without checking TTL - returns expired keys despite docstring claiming \"non-expired keys\"\n\n**Line 127**: `__contains__` returns True for expired keys, contradicting expected cache behavior\n\n---\n\n### Summary Table:\n\n| Line | Issue Type | Description |\n|------|------------|-------------|\n| 41 | Comparison operator | TTL check inverted (`>` should be `<`) |\n| 73 | Return contract | Returns True for non-existent keys |\n| 80 | State mutation | `_order` not cleared in `clear()` |\n| 93 | Edge case | Division by zero possible |\n| 108 | Thread-safety | Missing lock in `bulk_put()` |\n| 115 | Return contract | Returns expired keys |\n| 127 | Logic | Reports expired keys as present |",
+    "run": 0
+  }
+]

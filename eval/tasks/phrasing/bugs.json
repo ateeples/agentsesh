@@ -1,0 +1,70 @@
+{
+  "file": "buggy_cache.py",
+  "total_bugs": 8,
+  "bugs": [
+    {
+      "id": 1,
+      "line": 42,
+      "type": "logic",
+      "severity": "critical",
+      "description": "TTL check is inverted — expires_at > time.time() means NOT expired, but the code evicts the entry",
+      "keywords": ["ttl", "expires", "inverted", "expired", "condition", "wrong", "opposite", "reversed"]
+    },
+    {
+      "id": 2,
+      "line": 66,
+      "type": "logic",
+      "severity": "critical",
+      "description": "Evicts MRU instead of LRU — self._order.pop() removes last (most recent), should be pop(0) for first (least recent)",
+      "keywords": ["evict", "pop", "lru", "mru", "most recent", "least recent", "pop(0)", "first", "last", "wrong end"]
+    },
+    {
+      "id": 3,
+      "line": 79,
+      "type": "logic",
+      "severity": "minor",
+      "description": "delete() returns True when key doesn't exist — should return False",
+      "keywords": ["delete", "return", "true", "false", "not found", "doesn't exist", "wrong return"]
+    },
+    {
+      "id": 4,
+      "line": 85,
+      "type": "state",
+      "severity": "major",
+      "description": "clear() doesn't reset self._order — leaves ghost entries in the order list",
+      "keywords": ["clear", "_order", "ghost", "reset", "list", "not cleared", "inconsistent"]
+    },
+    {
+      "id": 5,
+      "line": 92,
+      "type": "runtime",
+      "severity": "major",
+      "description": "Division by zero in stats() when total is 0 (no requests made yet)",
+      "keywords": ["division", "zero", "stats", "total", "ZeroDivisionError", "divide by zero"]
+    },
+    {
+      "id": 6,
+      "line": 103,
+      "type": "logic",
+      "severity": "minor",
+      "description": "keys() doesn't check TTL — returns expired keys as valid",
+      "keywords": ["keys", "ttl", "expired", "check", "validation", "filter"]
+    },
+    {
+      "id": 7,
+      "line": 114,
+      "type": "concurrency",
+      "severity": "major",
+      "description": "bulk_put() doesn't acquire self._lock — not thread-safe despite class claiming thread safety",
+      "keywords": ["bulk_put", "lock", "thread", "safe", "concurrency", "race", "mutex", "threading"]
+    },
+    {
+      "id": 8,
+      "line": 121,
+      "type": "logic",
+      "severity": "minor",
+      "description": "__contains__ doesn't validate TTL — reports expired keys as present",
+      "keywords": ["contains", "__contains__", "in", "ttl", "expired", "check"]
+    }
+  ]
+}
