@@ -34,8 +34,8 @@ pip install -e .
 # Initialize in your project
 sesh init
 
-# Ingest session transcripts
-sesh log ~/.claude/projects/your-project/sessions/*.jsonl
+# Auto-discover and ingest all Claude Code sessions
+sesh watch --once
 
 # See your most recent session analysis
 sesh reflect
@@ -45,6 +45,9 @@ sesh report
 
 # Search past sessions
 sesh search "authentication bug"
+
+# Keep ingesting new sessions in the background
+sesh watch
 
 # Launch the dashboard
 sesh-web
@@ -95,9 +98,10 @@ Once configured, the agent has access to these tools:
 | `sesh_list` | List recent sessions with grades |
 | `sesh_stats` | Lifetime aggregate statistics |
 | `sesh_log` | Ingest a new transcript |
+| `sesh_sync` | Auto-discover and ingest new sessions |
 | `sesh_patterns` | Detailed pattern breakdown for a session |
 
-An agent can call `sesh_reflect` at session start to review its last session, or `sesh_report` to see if it's been improving or repeating the same mistakes.
+An agent can call `sesh_sync` then `sesh_reflect` at session start to auto-ingest new transcripts and review its last session, or `sesh_report` to see if it's been improving or repeating the same mistakes.
 
 ## Web Dashboard
 
@@ -153,6 +157,12 @@ sesh search <query>          Full-text search
 sesh list [--last N]         List sessions
 sesh stats                   Aggregate statistics
 sesh export <session_id>     Export session as JSON
+sesh watch [dirs...]         Auto-ingest new sessions (polls continuously)
+sesh watch --once [dirs...]  One-shot scan and ingest
+
+Watch flags:
+  --interval N               Poll interval in seconds (default: 30)
+  --settle N                 Seconds since last modification (default: 60)
 
 Global flags:
   --json                     Output as JSON

@@ -23,6 +23,7 @@ from .parsers import parse_transcript
 from .analyzers.trends import analyze_trends
 from .formatters.handoff import format_handoff
 from .formatters.report import format_session_report, format_trend_report
+from .watch import discover_session_dirs, ingest_new_files
 
 mcp = FastMCP(
     "sesh",
@@ -272,6 +273,37 @@ def sesh_log(file_path: str, format_hint: str = "auto") -> str:
         )
     except ValueError as e:
         return f"Error: {e}"
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def sesh_sync(directories: list[str] | None = None, settle_seconds: float = 60.0) -> str:
+    """Auto-discover and ingest new session transcripts.
+
+    Scans known session directories (like ~/.claude/projects/) for new
+    transcripts and ingests any that haven't been logged yet. Call this
+    at session start to ensure your analysis data is up-to-date.
+
+    Args:
+        directories: Specific directories to scan. Leave empty for auto-discovery.
+        settle_seconds: Only ingest files untouched for this many seconds (default: 60).
+    """
+    config = _get_config()
+    db = _get_db()
+    try:
+        if directories:
+            dirs = [Path(d) for d in directories]
+        else:
+            dirs = discover_session_dirs()
+
+        if not dirs:
+            return "No session directories found. Specify directories or ensure ~/.claude/projects/ exists."
+
+        count = ingest_new_files(db, config, dirs, settle_seconds=settle_seconds, quiet=True)
+        if count > 0:
+            return f"Synced {count} new session(s) from {len(dirs)} directory(ies)."
+        return "Already up to date — no new sessions found."
     finally:
         db.close()
 

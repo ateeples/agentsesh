@@ -19,6 +19,7 @@ from .formatters.report import (
 )
 from .formatters.handoff import format_handoff
 from .formatters.json_out import session_to_json, trend_to_json, to_json
+from .watch import discover_session_dirs, ingest_new_files, watch_loop
 
 
 def _get_db(args) -> Database:
@@ -274,6 +275,57 @@ def cmd_export(args) -> None:
     db.close()
 
 
+def cmd_watch(args) -> None:
+    """Watch directories for new sessions and auto-ingest."""
+    config = _get_config()
+    db = _get_db(args)
+
+    directories = []
+    if args.dirs:
+        directories = [Path(d) for d in args.dirs]
+    else:
+        # Auto-discover
+        directories = discover_session_dirs()
+        if not directories:
+            print(
+                "No session directories found. Specify directories:\n"
+                "  sesh watch ~/.claude/projects/",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    # Validate directories exist
+    for d in directories:
+        if not d.is_dir():
+            print(f"Warning: {d} is not a directory, skipping", file=sys.stderr)
+    directories = [d for d in directories if d.is_dir()]
+
+    if not directories:
+        print("Error: No valid directories to watch", file=sys.stderr)
+        sys.exit(1)
+
+    if args.once:
+        # One-shot scan
+        count = ingest_new_files(
+            db, config, directories,
+            settle_seconds=args.settle,
+            quiet=args.quiet,
+        )
+        if not args.quiet:
+            print(f"\nIngested {count} new session(s)")
+        db.close()
+    else:
+        try:
+            watch_loop(
+                db, config, directories,
+                interval=args.interval,
+                settle_seconds=args.settle,
+                quiet=args.quiet,
+            )
+        finally:
+            db.close()
+
+
 def main() -> None:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -331,6 +383,16 @@ def main() -> None:
     export_p = sub.add_parser("export", help="Export session data as JSON")
     export_p.add_argument("session_id", help="Session ID to export")
 
+    # watch
+    watch_p = sub.add_parser("watch", help="Auto-ingest new sessions from directories")
+    watch_p.add_argument("dirs", nargs="*", help="Directories to watch (default: auto-discover)")
+    watch_p.add_argument("--interval", type=float, default=30.0,
+                         help="Poll interval in seconds (default: 30)")
+    watch_p.add_argument("--settle", type=float, default=60.0,
+                         help="Seconds since last modification before ingesting (default: 60)")
+    watch_p.add_argument("--once", action="store_true",
+                         help="Scan once and exit (don't poll)")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -347,6 +409,7 @@ def main() -> None:
         "list": cmd_list,
         "stats": cmd_stats,
         "export": cmd_export,
+        "watch": cmd_watch,
     }
 
     cmd_func = commands.get(args.command)
