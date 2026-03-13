@@ -3,6 +3,7 @@
 from collections import Counter
 from pathlib import Path
 
+from ..analyzers.remediation import get_all_remediations, format_remediations
 from ..analyzers.trends import TrendReport
 from ..parsers.base import classify_tool
 
@@ -66,6 +67,12 @@ def format_session_report(session: dict, tool_calls: list[dict], patterns: list[
             icon = {"warning": "!!", "concern": "!", "info": "-"}.get(p["severity"], "-")
             lines.append(f"  [{icon}] {p['detail']}")
         lines.append("")
+
+    # Remediations
+    if patterns:
+        remediations = get_all_remediations(patterns)
+        if remediations:
+            lines.append(format_remediations(remediations, include_snippets=False))
 
     # Timeline (first 50)
     lines.append("## Timeline")

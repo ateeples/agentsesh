@@ -10,6 +10,11 @@ from .config import Config, find_config, find_sesh_dir, DEFAULT_CONFIG
 from .db import Database
 from .parsers import parse_transcript
 from .analyzers.trends import analyze_trends
+from .analyzers.remediation import (
+    get_all_remediations,
+    format_remediations,
+    generate_claude_md_patch,
+)
 from .formatters.report import (
     format_session_report,
     format_trend_report,
@@ -275,6 +280,63 @@ def cmd_export(args) -> None:
     db.close()
 
 
+def cmd_fix(args) -> None:
+    """Generate remediation recommendations for a session."""
+    db = _get_db(args)
+
+    if args.session_id:
+        session = db.get_session(args.session_id)
+    else:
+        sessions = db.list_sessions(limit=1)
+        if not sessions:
+            print("No sessions found. Run `sesh log` first.", file=sys.stderr)
+            sys.exit(3)
+        session = db.get_session(sessions[0]["id"])
+
+    if not session:
+        print(f"Session not found: {args.session_id}", file=sys.stderr)
+        sys.exit(4)
+
+    patterns = db.get_patterns(session["id"])
+    remediations = get_all_remediations(patterns)
+
+    if not remediations:
+        print(f"Session {session['id'][:16]}... ({session.get('grade', '?')}) — no anti-patterns detected. Clean session.")
+        db.close()
+        return
+
+    if args.json:
+        import json as json_mod
+        data = []
+        for r in remediations:
+            data.append({
+                "pattern_type": r.pattern_type,
+                "title": r.title,
+                "severity": r.severity,
+                "description": r.description,
+                "actions": r.actions,
+                "claude_md_snippet": r.claude_md_snippet,
+                "impact": r.impact,
+            })
+        print(json_mod.dumps(data, indent=2))
+    elif args.patch:
+        # Output just the CLAUDE.md patch
+        patch = generate_claude_md_patch(remediations)
+        if patch:
+            print(patch)
+        else:
+            print("No CLAUDE.md changes recommended.")
+    else:
+        # Full remediation report
+        print(f"# Remediations for {session['id'][:16]}...")
+        print(f"  Grade: {session.get('grade', '?')} (score: {session.get('score', 0)})")
+        print(f"  Patterns: {len(patterns)} detected")
+        print()
+        print(format_remediations(remediations, include_snippets=True))
+
+    db.close()
+
+
 def cmd_watch(args) -> None:
     """Watch directories for new sessions and auto-ingest."""
     config = _get_config()
@@ -383,6 +445,13 @@ def main() -> None:
     export_p = sub.add_parser("export", help="Export session data as JSON")
     export_p.add_argument("session_id", help="Session ID to export")
 
+    # fix
+    fix_p = sub.add_parser("fix", help="Generate remediation recommendations")
+    fix_p.add_argument("session_id", nargs="?", help="Session ID (default: most recent)")
+    fix_p.add_argument("--json", action="store_true", help="Output as JSON")
+    fix_p.add_argument("--patch", action="store_true",
+                       help="Output CLAUDE.md patch only (ready to paste)")
+
     # watch
     watch_p = sub.add_parser("watch", help="Auto-ingest new sessions from directories")
     watch_p.add_argument("dirs", nargs="*", help="Directories to watch (default: auto-discover)")
@@ -409,6 +478,7 @@ def main() -> None:
         "list": cmd_list,
         "stats": cmd_stats,
         "export": cmd_export,
+        "fix": cmd_fix,
         "watch": cmd_watch,
     }
 
