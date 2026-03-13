@@ -4,12 +4,13 @@ from pathlib import Path
 
 from .base import BaseParser, NormalizedSession
 from .claude_code import ClaudeCodeParser
+from .openai_codex import OpenAICodexParser
 
 # Parser registry — tried in priority order
 _PARSERS: list[type[BaseParser]] = [
     ClaudeCodeParser,
-    # OpenAIParser,  # v0.2
-    # GenericParser,  # v0.2
+    OpenAICodexParser,
+    # GenericParser,  # future
 ]
 
 

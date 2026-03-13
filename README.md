@@ -194,7 +194,8 @@ Global flags:
 ## Supported formats
 
 - **Claude Code** (.jsonl) — fully supported
-- OpenAI, generic — planned
+- **OpenAI Codex CLI** (.jsonl) — fully supported (auto-detected, maps `exec_command`→Bash, `apply_patch`→Edit)
+- Generic — planned
 
 ## Requirements
 
