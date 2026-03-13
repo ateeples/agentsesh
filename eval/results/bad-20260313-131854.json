@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-03-13T13:20:20.372275",
+  "config": "bad",
+  "run_id": "20260313-131854",
+  "model": "MiniMax-M2.5-highspeed",
+  "duration_seconds": 86.0,
+  "prompt_tokens": 908,
+  "completion_tokens": 6489,
+  "parsed_tool_calls": 27,
+  "grade": "?",
+  "score": 0,
+  "patterns": []
+}
