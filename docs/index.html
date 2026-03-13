@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sesh — Agent Session Intelligence</title>
+<meta name="description" content="Behavioral analysis, grading, and self-improvement for AI coding agents. Analyze Claude Code and OpenAI Codex sessions.">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --border: #222;
+    --text: #e0e0e0;
+    --dim: #666;
+    --accent: #4a9eff;
+    --green: #4a9;
+    --amber: #da3;
+    --red: #e55;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Hero */
+  .hero {
+    padding: 80px 0 60px;
+    text-align: center;
+  }
+
+  .hero h1 {
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    margin-bottom: 16px;
+  }
+
+  .hero h1 span { color: var(--accent); }
+
+  .hero .tagline {
+    font-size: 18px;
+    color: var(--dim);
+    margin-bottom: 32px;
+  }
+
+  .install-box {
+    display: inline-block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 28px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    position: relative;
+  }
+
+  .install-box:hover { border-color: var(--accent); }
+
+  .install-box .prompt { color: var(--dim); }
+  .install-box .cmd { color: var(--green); }
+
+  .install-box .copied {
+    position: absolute;
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: var(--green);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .install-box .copied.show { opacity: 1; }
+
+  .version {
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--dim);
+  }
+
+  .version a { color: var(--accent); text-decoration: none; }
+  .version a:hover { text-decoration: underline; }
+
+  /* Sections */
+  section {
+    padding: 48px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  section h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    letter-spacing: -0.5px;
+  }
+
+  /* Grade demo */
+  .grade-demo {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    font-size: 14px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.8;
+  }
+
+  .grade-demo .g { color: var(--green); }
+  .grade-demo .a { color: var(--amber); }
+  .grade-demo .r { color: var(--red); }
+  .grade-demo .d { color: var(--dim); }
+  .grade-demo .b { color: var(--accent); }
+
+  /* Features */
+  .features {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .feature {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  .feature h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .feature p {
+    font-size: 13px;
+    color: var(--dim);
+    line-height: 1.6;
+  }
+
+  /* Interfaces */
+  .interfaces {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  .interface {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .interface h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .interface .who {
+    font-size: 12px;
+    color: var(--dim);
+    margin-bottom: 12px;
+  }
+
+  .interface code {
+    font-size: 12px;
+    color: var(--green);
+    background: var(--bg);
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+
+  /* Formats */
+  .formats {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .format {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .format .label { color: var(--text); font-weight: 600; }
+  .format .status { color: var(--green); font-size: 12px; }
+
+  /* Patterns list */
+  .patterns {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .pattern {
+    font-size: 13px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-radius: 6px;
+    border-left: 3px solid var(--border);
+  }
+
+  .pattern.warn { border-left-color: var(--amber); }
+  .pattern.concern { border-left-color: var(--red); }
+
+  /* Footer */
+  footer {
+    padding: 48px 0;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 13px;
+    color: var(--dim);
+  }
+
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .hero { padding: 48px 0 40px; }
+    .hero h1 { font-size: 32px; }
+    .features, .interfaces, .patterns { grid-template-columns: 1fr; }
+    .grade-demo { font-size: 12px; padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="hero">
+    <h1><span>sesh</span></h1>
+    <p class="tagline">Agent session intelligence for AI coding agents</p>
+    <div class="install-box" onclick="copyInstall()">
+      <span class="copied" id="copied">copied</span>
+      <span class="prompt">$</span> <span class="cmd">pip install agentsesh</span>
+    </div>
+    <p class="version">v0.4.0 &middot; Python 3.10+ &middot; zero dependencies &middot; <a href="https://github.com/ateeples/agentsesh">GitHub</a></p>
+  </div>
+
+  <section>
+    <h2>What it does</h2>
+    <div class="grade-demo"><span class="d"># Ingest and grade a session</span>
+<span class="prompt">$</span> sesh log ~/.claude/projects/myapp/*.jsonl
+  <span class="g">[A-]</span> session-2026-03-13.jsonl — 47 calls, 1 error, 0 patterns
+
+<span class="d"># See what happened</span>
+<span class="prompt">$</span> sesh reflect --last 1
+<span class="b">Session:</span> session-2026-03-13
+<span class="b">Grade:</span>   <span class="g">A- (91/100)</span>
+<span class="b">Model:</span>   claude-opus-4-6
+<span class="b">Duration:</span> 34 min · 47 tool calls · 1 error
+
+<span class="b">Patterns:</span>
+  <span class="a">⚠ missed_parallelism</span> 2 independent reads done sequentially
+
+<span class="b">Deductions:</span>
+  -2  error rate (2.1%)
+  -5  missed parallelism (2 cases)
+  -2  low read ratio (0.45)
+
+<span class="b">Bonuses:</span>
+  +3  high read ratio bonus (reads before writes)
+  +2  zero blind edits</div>
+  </section>
+
+  <section>
+    <h2>Three interfaces, one engine</h2>
+    <div class="interfaces">
+      <div class="interface">
+        <h3>CLI</h3>
+        <p class="who">Developers</p>
+        <code>sesh reflect</code>
+      </div>
+      <div class="interface">
+        <h3>MCP Server</h3>
+        <p class="who">Agents at runtime</p>
+        <code>sesh-mcp</code>
+      </div>
+      <div class="interface">
+        <h3>Web Dashboard</h3>
+        <p class="who">Observability</p>
+        <code>sesh-web</code>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>9 anti-pattern detectors</h2>
+    <div class="patterns">
+      <div class="pattern warn">repeated searches</div>
+      <div class="pattern concern">blind edits</div>
+      <div class="pattern warn">high error rate</div>
+      <div class="pattern concern">error streaks</div>
+      <div class="pattern warn">low read ratio</div>
+      <div class="pattern warn">bash overuse</div>
+      <div class="pattern warn">write-then-read</div>
+      <div class="pattern warn">scattered files</div>
+      <div class="pattern warn">missed parallelism</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Supported formats</h2>
+    <div class="formats">
+      <div class="format">
+        <span class="label">Claude Code</span> <span class="status">.jsonl</span>
+      </div>
+      <div class="format">
+        <span class="label">OpenAI Codex CLI</span> <span class="status">.jsonl</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Features</h2>
+    <div class="features">
+      <div class="feature">
+        <h3>Grading</h3>
+        <p>0-100 score with A+ to F grades. Deductions for anti-patterns, bonuses for good habits.</p>
+      </div>
+      <div class="feature">
+        <h3>Trend analysis</h3>
+        <p>Track improvement or regression across sessions. Spot recurring patterns.</p>
+      </div>
+      <div class="feature">
+        <h3>Auto-discovery</h3>
+        <p><code>sesh watch</code> monitors transcript directories and auto-ingests new sessions.</p>
+      </div>
+      <div class="feature">
+        <h3>Full-text search</h3>
+        <p>Search past sessions by tool calls, patterns, or raw text.</p>
+      </div>
+      <div class="feature">
+        <h3>Handoff docs</h3>
+        <p>Generate context handoff documents for session continuity.</p>
+      </div>
+      <div class="feature">
+        <h3>Zero dependencies</h3>
+        <p>Pure Python stdlib. No external packages required for core functionality.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Built by <a href="https://github.com/ateeples">Andy Teeples</a> &amp; Opus &middot;
+    <a href="https://github.com/ateeples/agentsesh">Source</a> &middot;
+    <a href="https://pypi.org/project/agentsesh/">PyPI</a>
+  </footer>
+</div>
+
+<script>
+function copyInstall() {
+  navigator.clipboard.writeText('pip install agentsesh');
+  const el = document.getElementById('copied');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1500);
+}
+</script>
+
+</body>
+</html>
