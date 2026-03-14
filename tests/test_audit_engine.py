@@ -160,8 +160,14 @@ class TestCombineMetrics:
 
 class TestRegistry:
     def setup_method(self):
-        """Clear registry before each test."""
+        """Save and clear registry before each test."""
+        self._saved_registry = list(_REGISTRY)
         _REGISTRY.clear()
+
+    def teardown_method(self):
+        """Restore registry after each test."""
+        _REGISTRY.clear()
+        _REGISTRY.extend(self._saved_registry)
 
     def test_register_and_list(self):
         def fake_detector(repo_path, config):
@@ -180,7 +186,12 @@ class TestRegistry:
 
 class TestRunAudit:
     def setup_method(self):
+        self._saved_registry = list(_REGISTRY)
         _REGISTRY.clear()
+
+    def teardown_method(self):
+        _REGISTRY.clear()
+        _REGISTRY.extend(self._saved_registry)
 
     def test_empty_registry(self):
         result = run_audit(Path("/tmp"))

@@ -42,6 +42,9 @@ from .formatters.handoff import format_handoff
 from .formatters.json_out import session_to_json, trend_to_json, to_json
 from .watch import discover_session_dirs, ingest_new_files, watch_loop
 from .analyze import analyze_session, format_analysis, analysis_to_json
+from .audit import _metrics  # noqa: F401 — triggers detector registration
+from .audit.engine import run_audit
+from .audit.formatter import format_audit_report, audit_to_json
 
 
 def _get_db(args) -> Database:
@@ -985,6 +988,22 @@ def cmd_analyze(args) -> None:
         print(format_analysis(result, verbose=args.verbose))
 
 
+def cmd_audit(args) -> None:
+    """Grade a repo's agent-readiness — no database required."""
+    path = Path(args.path) if args.path else Path.cwd()
+    if not path.exists() or not path.is_dir():
+        print(f"Error: Not a directory: {path}", file=sys.stderr)
+        sys.exit(1)
+
+    enabled = [args.metric] if args.metric else None
+    result = run_audit(path, enabled=enabled)
+
+    if args.json:
+        print(audit_to_json(result))
+    else:
+        print(format_audit_report(result))
+
+
 def main() -> None:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -1089,6 +1108,12 @@ def main() -> None:
     analyze_p.add_argument("--fix", action="store_true",
                            help="Output CLAUDE.md patch only (ready to paste)")
 
+    # audit
+    audit_p = sub.add_parser("audit", help="Grade a repo's agent-readiness (0-100, A+ to F)")
+    audit_p.add_argument("path", nargs="?", help="Path to repo (default: current directory)")
+    audit_p.add_argument("--metric", help="Run only one metric (e.g. bootstrap, file_discipline)")
+    audit_p.add_argument("--json", action="store_true", help="Output as JSON")
+
     # watch
     watch_p = sub.add_parser("watch", help="Auto-ingest new sessions from directories")
     watch_p.add_argument("dirs", nargs="*", help="Directories to watch (default: auto-discover)")
@@ -1120,6 +1145,7 @@ def main() -> None:
         "replay": cmd_replay,
         "debug": cmd_debug,
         "analyze": cmd_analyze,
+        "audit": cmd_audit,
         "watch": cmd_watch,
     }
 
