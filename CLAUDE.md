@@ -6,7 +6,7 @@ Agent session intelligence CLI. Parses AI agent transcripts, detects behavioral 
 
 ```bash
 pip install -e .          # install from source
-pytest tests/ -v          # run tests (355+)
+pytest tests/ -v          # run tests (~400)
 ruff check sesh/ tests/   # lint
 ```
 
@@ -35,7 +35,7 @@ ruff check sesh/ tests/   # lint
 - Zero required dependencies. The stdlib is the dependency.
 - All new features need tests. Run `pytest tests/ -v` before committing.
 - Use `ruff` for linting. Run `ruff check sesh/` before committing.
-- CLI subcommands go in `cli.py` as `cmd_<name>(args)` functions.
+- CLI subcommands live in `sesh/commands/` — dispatch is in `cli.py`.
 - Pattern detectors register via `register_pattern()` in `analyzers/patterns.py`.
 - Audit metric detectors register via `register_metric()` in `audit/engine.py`.
 - Every command supports `--json` for machine-readable output.

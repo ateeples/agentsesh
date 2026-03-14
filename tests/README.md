@@ -1,6 +1,6 @@
 # tests/ — Test Suite
 
-355+ tests covering all major subsystems. Run with `pytest tests/ -v`.
+~400 tests covering all major subsystems. Run with `pytest tests/ -v`.
 
 ## Test Files
 

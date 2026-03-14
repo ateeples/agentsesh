@@ -11,7 +11,7 @@ Cross-agent/cross-tool guidance for working with the AgentSesh codebase.
 
 ## Code Structure
 
-- CLI subcommands: `sesh/cli.py` — add new commands as `cmd_<name>(args)` functions
+- CLI subcommands: `sesh/commands/` — dispatch is in `sesh/cli.py`
 - Pattern detectors: `sesh/analyzers/patterns.py` — register via `register_pattern()`
 - Audit metrics: `sesh/audit/metrics.py` — register via `register_metric()`
 - Parsers: `sesh/parsers/` — implement `BaseParser` protocol
