@@ -1,4 +1,9 @@
-"""Tests for Claude Code JSONL parser."""
+"""Tests for Claude Code JSONL parser.
+
+Covers: format detection, tool call extraction, error detection,
+timestamp parsing, duration calculation, event counting, and
+edge cases (empty files, malformed JSON, missing fields).
+"""
 
 import json
 import tempfile
@@ -7,6 +12,9 @@ from pathlib import Path
 import pytest
 from sesh.parsers.claude_code import ClaudeCodeParser
 from sesh.parsers import parse_transcript
+
+
+# --- Test fixtures and helpers ---
 
 
 def _write_jsonl(path: Path, lines: list[dict]) -> None:
@@ -47,6 +55,9 @@ def _make_user_message(text: str, ts: str = "2026-03-12T10:00:00Z") -> dict:
     }
 
 
+# --- Format detection: can_parse() ---
+
+
 class TestCanParse:
     def test_valid_jsonl(self, tmp_path):
         p = tmp_path / "session.jsonl"
@@ -70,6 +81,9 @@ class TestCanParse:
         lines.append({"type": "assistant", "message": {"content": []}})
         _write_jsonl(p, lines)
         assert ClaudeCodeParser.can_parse(p) is True
+
+
+# --- Full parsing: tool calls, events, timing ---
 
 
 class TestParse:
@@ -140,6 +154,9 @@ class TestParse:
         session = ClaudeCodeParser.parse(p)
         assert session.metadata["thinking_blocks"] == 1
         assert session.metadata["total_thinking_chars"] > 0
+
+
+# --- Auto-detection dispatch ---
 
 
 class TestAutoDetection:

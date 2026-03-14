@@ -1,4 +1,8 @@
-"""Tests for the remediation engine."""
+"""Tests for the remediation engine.
+
+Covers: pattern-to-remediation mapping, severity classification,
+CLAUDE.md patch generation, and human-readable formatting.
+"""
 
 import pytest
 from sesh.analyzers.remediation import (
@@ -8,6 +12,12 @@ from sesh.analyzers.remediation import (
     generate_claude_md_patch,
     Remediation,
 )
+
+
+# --- Pattern-to-remediation mapping ---
+
+
+# --- Pattern type → Remediation lookup ---
 
 
 class TestGetRemediation:

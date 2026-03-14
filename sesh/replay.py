@@ -42,6 +42,10 @@ def build_timeline_from_source(source_path: str) -> list[ReplayStep]:
     if not path.exists():
         return []
 
+    # Two-pass approach: first collect results, then walk chronologically.
+    # This is necessary because tool_result blocks appear in user messages
+    # after the tool_use blocks in assistant messages.
+
     # First pass: collect tool results keyed by tool_use_id
     tool_results: dict[str, dict] = {}
     with open(path) as f:
@@ -66,7 +70,8 @@ def build_timeline_from_source(source_path: str) -> list[ReplayStep]:
                         "is_error": _is_tool_error(is_err, rc_text),
                     }
 
-    # Second pass: build timeline in order
+    # Second pass: walk chronologically and build interleaved timeline.
+    # Each JSONL line becomes one or more steps: thinking, text, tool_call, user.
     steps: list[ReplayStep] = []
     seq = 0
 
@@ -156,10 +161,13 @@ def build_timeline_from_source(source_path: str) -> list[ReplayStep]:
     return steps
 
 
+# --- DB-only fallback timeline ---
+
+
 def build_timeline_from_db(tool_calls: list[dict]) -> list[ReplayStep]:
     """Build timeline from DB tool calls (fallback when source file is gone).
 
-    Only has tool calls — no user messages or assistant text.
+    Only has tool calls — no user messages, assistant text, or thinking blocks.
     Output is truncated to 300 chars (what the DB stores).
     """
     steps: list[ReplayStep] = []
@@ -190,6 +198,9 @@ def build_timeline_from_db(tool_calls: list[dict]) -> list[ReplayStep]:
     return steps
 
 
+# --- Unified timeline builder ---
+
+
 def build_timeline(
     tool_calls: list[dict],
     source_path: str | None = None,
@@ -197,6 +208,7 @@ def build_timeline(
     """Build timeline, preferring source file for full fidelity.
 
     Returns (steps, source) where source is "file" or "db".
+    Falls back to DB-only timeline if source file is missing or empty.
     """
     if source_path:
         steps = build_timeline_from_source(source_path)
@@ -206,15 +218,19 @@ def build_timeline(
     return build_timeline_from_db(tool_calls), "db"
 
 
+# --- Pattern annotation ---
+
+
 def annotate_timeline(
     steps: list[ReplayStep],
     patterns: list[Pattern | dict],
 ) -> None:
     """Add pattern annotations to timeline steps in-place.
 
-    Maps pattern tool_indices back to the corresponding tool_call steps.
+    Maps pattern tool_indices (position in tool-call-only sequence)
+    back to the corresponding ReplayStep in the full timeline.
     """
-    # Build index: tool_call seq -> step index
+    # Build index: tool_call ordinal -> full timeline step index
     tool_seq_to_idx: dict[int, int] = {}
     tool_seq = 0
     for i, step in enumerate(steps):
@@ -244,6 +260,9 @@ def annotate_timeline(
                 steps[step_idx].annotations.append(label)
 
 
+# --- Filtering and formatting ---
+
+
 def filter_steps(
     steps: list[ReplayStep],
     errors_only: bool = False,
@@ -251,7 +270,7 @@ def filter_steps(
     step_range: tuple[int, int] | None = None,
     tool_filter: str | None = None,
 ) -> list[ReplayStep]:
-    """Filter timeline steps."""
+    """Filter timeline steps by range, error status, type, or tool name."""
     result = steps
 
     if step_range:
@@ -396,7 +415,11 @@ def _format_ts(ts: str | None) -> str:
 
 
 def _tool_summary(name: str, input_data: dict, is_error: bool) -> str:
-    """One-line summary of a tool call."""
+    """One-line summary of a tool call.
+
+    Extracts the most salient info from each tool type:
+    Read → file path, Bash → command, Grep → pattern, etc.
+    """
     err = " [ERROR]" if is_error else ""
 
     if name == "Read":

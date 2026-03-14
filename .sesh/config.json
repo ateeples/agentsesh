@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "db_path": ".sesh/sesh.db",
+  "default_report_count": 20,
+  "patterns": {
+    "enabled": [
+      "all"
+    ],
+    "disabled": [],
+    "thresholds": {
+      "error_rate_concern": 0.15,
+      "bash_overuse_min": 3,
+      "scattered_dirs_min": 8,
+      "missed_parallel_min": 4,
+      "error_streak_min": 3,
+      "low_read_ratio": 1.5,
+      "min_rw_calls": 5,
+      "min_tool_calls_for_scatter": 10
+    }
+  },
+  "grading": {
+    "error_rate_max_deduction": 20,
+    "blind_edit_deduction": 5,
+    "blind_edit_max": 15,
+    "error_streak_deduction": 3,
+    "error_streak_max": 15,
+    "bash_anti_deduction": 2,
+    "bash_anti_max": 10,
+    "read_ratio_bonus": 5,
+    "read_ratio_threshold": 3.0,
+    "parallel_bonus": 5,
+    "parallel_min_batches": 3
+  },
+  "custom_tools": {
+    "categories": {
+      "read": [],
+      "write": [],
+      "search": [],
+      "meta": []
+    }
+  },
+  "handoff": {
+    "max_files_listed": 20,
+    "include_process_notes": true
+  }
+}

@@ -1,0 +1,4 @@
+# sesh database may contain sensitive data
+*
+!.gitignore
+!config.json

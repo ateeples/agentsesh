@@ -1,4 +1,8 @@
-"""Human-readable report formatters for sesh."""
+"""Human-readable report formatters for sesh.
+
+All formatters take DB rows (dicts) as input and return plain text strings.
+They are display-only — no analysis logic lives here.
+"""
 
 from collections import Counter
 from pathlib import Path
@@ -8,11 +12,18 @@ from ..analyzers.trends import TrendReport
 from ..parsers.base import classify_tool
 
 
+# --- Session report ---
+
+
 def format_session_report(session: dict, tool_calls: list[dict], patterns: list[dict]) -> str:
-    """Format a single session analysis as human-readable text."""
+    """Format a single session analysis as human-readable text.
+
+    Includes: metadata, grade breakdown, pattern summary, tool usage breakdown,
+    and remediation recommendations.
+    """
     lines = []
 
-    # Header
+    # Header — session ID and key metadata
     lines.append(f"# Session: {session['id']}")
     lines.append("")
 

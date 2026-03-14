@@ -17,13 +17,22 @@ from .base import BaseParser, Event, NormalizedSession, ToolCall, classify_tool
 
 
 def _is_tool_error(is_error_flag: bool, content_text: str) -> bool:
-    """Determine if a tool result represents an actual error."""
+    """Determine if a tool result represents an actual error.
+
+    The is_error flag from Claude's API isn't always set (some tools return
+    error text in content without flagging it), so we also check for
+    common error signals in the output text.
+    """
+    # Explicit error flag from the API
     if is_error_flag:
         return True
+    # Exit code prefix from Bash tool results
     if content_text.startswith("Exit code"):
         return True
+    # Generic error prefix
     if content_text.startswith("Error:"):
         return True
+    # Check first line for OS-level error signals
     first_line = content_text.split("\n")[0] if content_text else ""
     for signal in ("command not found", "No such file", "Permission denied", "ENOENT", "EACCES"):
         if signal in first_line:
@@ -77,12 +86,14 @@ class ClaudeCodeParser(BaseParser):
     @staticmethod
     def parse(file_path: Path) -> NormalizedSession:
         """Parse a Claude Code JSONL transcript into NormalizedSession."""
-        tool_uses: list[dict] = []
-        tool_results: dict[str, dict] = {}
-        events: list[Event] = []
-        raw_parts: list[str] = []
+        # Two-pass approach: collect tool_use blocks and tool_result blocks
+        # separately, then match them by tool_use_id to build ToolCall objects.
+        tool_uses: list[dict] = []        # Ordered list of tool invocations
+        tool_results: dict[str, dict] = {} # tool_use_id → result data
+        events: list[Event] = []           # Non-tool events (user messages, assistant text)
+        raw_parts: list[str] = []          # Text content for FTS indexing
         model_name: str | None = None
-        thinking_blocks: list[dict] = []
+        thinking_blocks: list[dict] = []   # Metadata for thinking block analysis
 
         with open(file_path) as f:
             for line_num, line in enumerate(f):
@@ -165,7 +176,7 @@ class ClaudeCodeParser(BaseParser):
                         ))
                         raw_parts.append(content)
 
-        # Match tool uses with results and build ToolCall objects
+        # Match tool_use → tool_result by ID and build ToolCall objects
         tool_calls: list[ToolCall] = []
         for seq, tu in enumerate(tool_uses):
             result = tool_results.get(tu["id"], {})
@@ -182,7 +193,7 @@ class ClaudeCodeParser(BaseParser):
             )
             tool_calls.append(tc)
 
-        # Compute timestamps and duration
+        # Derive session timing from first/last tool call timestamps
         timestamps = [tc.timestamp for tc in tool_calls if tc.timestamp]
         start_time = timestamps[0] if timestamps else None
         end_time = timestamps[-1] if len(timestamps) >= 2 else None

@@ -14,13 +14,20 @@ from .analyzers.patterns import detect_all_patterns
 from .analyzers.trends import SessionSummary
 from .parsers.base import NormalizedSession
 
+# Schema version — increment when adding/altering tables.
+# Migration logic would go in _ensure_schema() if needed.
 SCHEMA_VERSION = 1
 
+# SQL schema for all sesh tables.
+# Uses WAL mode for concurrent read/write access.
+# FTS5 virtual table enables full-text search over raw transcript text.
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
 );
 
+-- Main session table: one row per ingested transcript.
+-- Stores pre-computed metrics for fast querying.
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     source_format TEXT NOT NULL,
@@ -110,7 +117,9 @@ class Database:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(self.db_path))
+        # Row factory for dict-like access on query results
         self.conn.row_factory = sqlite3.Row
+        # WAL mode for concurrent read/write (watch mode writes while CLI reads)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self._ensure_schema()
 
@@ -147,11 +156,11 @@ class Database:
         if self.session_exists(session.session_id):
             raise ValueError(f"Session {session.session_id} already exists")
 
-        # Analyze
+        # Run all analyzers on the raw tool calls
         patterns = detect_all_patterns(session.tool_calls, thresholds=thresholds)
         grade_result = grade_session(session.tool_calls, weights=grading_weights)
 
-        # Compute metrics
+        # Compute per-session metrics for fast querying (avoid re-analysis on read)
         errors = sum(1 for tc in session.tool_calls if tc.is_error)
         total = len(session.tool_calls)
         reads = sum(1 for tc in session.tool_calls if tc.name in ("Read", "Grep", "Glob"))
@@ -159,7 +168,7 @@ class Database:
         bash_count = sum(1 for tc in session.tool_calls if tc.name == "Bash")
         user_msgs = sum(1 for e in session.events if e.type == "user_message")
 
-        # Blind edits
+        # Blind edits: Edit calls where the file wasn't Read first
         files_read: set[str] = set()
         blind_edits = 0
         for tc in session.tool_calls:
@@ -169,7 +178,8 @@ class Database:
                 if tc.input_data.get("file_path", "") not in files_read:
                     blind_edits += 1
 
-        # Bash anti-pattern count
+        # Bash anti-patterns: using Bash for tasks with dedicated tools
+        # (e.g., cat/grep when Read/Grep tools exist)
         bash_anti = 0
         for tc in session.tool_calls:
             if tc.name == "Bash":
@@ -179,7 +189,7 @@ class Database:
                         bash_anti += 1
                         break
 
-        # Error streak
+        # Longest consecutive error streak (indicates the agent was stuck)
         max_streak = 0
         current = 0
         for tc in session.tool_calls:
@@ -189,7 +199,8 @@ class Database:
             else:
                 current = 0
 
-        # Parallel missed
+        # Missed parallelism: consecutive Read calls on different files
+        # could have been batched into a single parallel request
         parallel_missed = 0
         for i in range(len(session.tool_calls) - 1):
             curr = session.tool_calls[i]
@@ -205,7 +216,9 @@ class Database:
         pattern_types = [p.type for p in patterns]
         grade_notes_parts = grade_result.deductions + grade_result.bonuses
 
-        # Insert session
+        # Store session with all pre-computed metrics.
+        # These are computed at ingestion time so queries don't need
+        # to re-analyze tool calls on every read.
         self.conn.execute(
             """INSERT INTO sessions (
                 id, source_format, source_path, start_time, end_time,
@@ -245,7 +258,8 @@ class Database:
             ),
         )
 
-        # Insert tool calls
+        # Store individual tool calls for replay and detailed analysis.
+        # Input is stored as JSON; output is truncated to 300 chars.
         for tc in session.tool_calls:
             self.conn.execute(
                 """INSERT INTO tool_calls (
@@ -266,14 +280,14 @@ class Database:
                 ),
             )
 
-        # Insert patterns
+        # Store detected patterns for quick retrieval without re-detection
         for p in patterns:
             self.conn.execute(
                 "INSERT INTO patterns (session_id, type, severity, detail) VALUES (?, ?, ?, ?)",
                 (session.session_id, p.type, p.severity, p.detail),
             )
 
-        # Insert FTS content
+        # Store raw text for full-text search via FTS5 virtual table
         self.conn.execute(
             "INSERT INTO sessions_fts_content (session_id, raw_text) VALUES (?, ?)",
             (session.session_id, session.raw_text),
@@ -311,6 +325,8 @@ class Database:
             "SELECT * FROM patterns WHERE session_id = ?", (session_id,)
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # --- Query methods ---
 
     def list_sessions(self, limit: int = 20) -> list[dict]:
         """List sessions ordered by ingestion time (newest first)."""
@@ -352,7 +368,11 @@ class Database:
         return summaries
 
     def search(self, query: str, limit: int = 10) -> list[dict]:
-        """Full-text search across session transcripts."""
+        """Full-text search across session transcripts using FTS5.
+
+        Uses Porter stemming and Unicode tokenization for fuzzy matching.
+        """
+        # FTS5 snippet() highlights matches with >>> <<< markers
         rows = self.conn.execute(
             """SELECT c.session_id, s.grade, s.score, s.ingested_at,
                       snippet(sessions_fts, 1, '>>>', '<<<', '...', 64) as snippet
@@ -365,6 +385,8 @@ class Database:
             (query, limit),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # --- Aggregate statistics ---
 
     def get_stats(self) -> dict:
         """Get aggregate statistics across all sessions."""

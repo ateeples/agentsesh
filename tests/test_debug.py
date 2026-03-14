@@ -81,6 +81,9 @@ def _make_steps(*specs):
 
 # === DecisionPoint extraction ===
 
+# --- Decision point extraction from timeline ---
+
+
 class TestExtractDecisionPoints:
     def test_empty_timeline(self):
         assert extract_decision_points([]) == []
@@ -193,6 +196,9 @@ class TestExtractDecisionPoints:
 
 # === Search ===
 
+# --- Thinking block text search ---
+
+
 class TestSearchThinking:
     def _sample_dps(self):
         """Three decision points with distinct thinking content."""
@@ -247,6 +253,9 @@ class TestSearchThinking:
 
 
 # === Reverse lookup: action → thinking ===
+
+# --- Reverse lookup: action → thinking ---
+
 
 class TestLookupByAction:
     def _sample_dps(self):
@@ -345,6 +354,9 @@ class TestLookupByAction:
 
 
 # === Dotnotes: extract and search dot-notation paths from thinking ===
+
+# --- Dot-notation path extraction from text ---
+
 
 class TestExtractDotnotes:
     """Test extraction of dot-notation paths from thinking text."""
@@ -459,6 +471,9 @@ class TestIndexDotnotes:
         assert index_dotnotes(dps) == {}
 
 
+# --- Glob-style dotnote search ---
+
+
 class TestSearchDotnotes:
     """Test glob-style dotnote search."""
 
@@ -521,6 +536,9 @@ class TestSearchDotnotes:
 
 
 # === Pattern correlation: connect antipatterns to decision points ===
+
+# --- Pattern → decision point correlation ---
+
 
 class TestCorrelatePatterns:
     """Test mapping pattern tool_indices back to the decision points that caused them."""
@@ -679,6 +697,9 @@ class TestCorrelatePatterns:
 
 
 # === End-to-end integration: JSONL → timeline → decision points → search ===
+
+# --- End-to-end integration: source file → decision points → search ---
+
 
 class TestEndToEnd:
     def test_full_pipeline(self):

@@ -65,6 +65,9 @@ def _make_session_file(dir_path: Path, name: str = "test-session.jsonl") -> Path
     return path
 
 
+# --- File discovery with settle-time filtering ---
+
+
 class TestFindTranscriptFiles:
     def test_finds_jsonl_files(self, tmp_path):
         session = _make_session_file(tmp_path)
@@ -126,6 +129,9 @@ class TestFindTranscriptFiles:
 
         files = find_transcript_files([dir1, dir2], settle_seconds=60)
         assert len(files) == 2
+
+
+# --- Auto-ingestion with dedup ---
 
 
 class TestIngestNewFiles:
@@ -205,6 +211,9 @@ class TestIngestNewFiles:
         assert count >= 1
 
         db.close()
+
+
+# --- Session directory auto-discovery ---
 
 
 class TestDiscoverSessionDirs:

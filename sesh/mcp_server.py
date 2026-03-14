@@ -25,6 +25,8 @@ from .formatters.handoff import format_handoff
 from .formatters.report import format_session_report, format_trend_report
 from .watch import discover_session_dirs, ingest_new_files
 
+# Initialize FastMCP server with instructions that guide agents
+# to use the right tool for their current need.
 mcp = FastMCP(
     "sesh",
     instructions=(
@@ -37,18 +39,26 @@ mcp = FastMCP(
 )
 
 
+# --- Database resolution ---
+# MCP tools resolve the database on each call (no persistent state).
+# Priority: SESH_DB env var > .sesh/config.json > .sesh/ directory walk.
+
+
 def _get_db() -> Database:
     """Resolve the sesh database, checking env var then walking up from cwd."""
+    # Env var takes priority — set in MCP config for explicit paths
     db_path_env = os.environ.get("SESH_DB")
     if db_path_env:
         return Database(db_path_env)
 
+    # Walk up from cwd looking for .sesh/config.json
     config_path = find_config()
     if config_path:
         config = Config(config_path)
         sesh_parent = config_path.parent.parent
         return Database(sesh_parent / config.db_path)
 
+    # Fall back to any .sesh/ directory
     sesh_dir = find_sesh_dir()
     if sesh_dir:
         return Database(sesh_dir / "sesh.db")
@@ -61,6 +71,12 @@ def _get_db() -> Database:
 def _get_config() -> Config:
     config_path = find_config()
     return Config(config_path)
+
+
+# --- MCP Tools ---
+# Each tool maps to a CLI command but returns string output
+# suitable for an agent to read. All tools handle their own
+# database lifecycle (open → work → close in finally block).
 
 
 @mcp.tool()
@@ -237,6 +253,10 @@ def sesh_stats() -> str:
         db.close()
 
 
+# --- Ingestion tools ---
+# These tools modify the database (insert sessions, sync from directories).
+
+
 @mcp.tool()
 def sesh_log(file_path: str, format_hint: str = "auto") -> str:
     """Ingest a session transcript file into the sesh database.
@@ -345,8 +365,12 @@ def sesh_patterns(session_id: str = "") -> str:
         db.close()
 
 
+# --- Server entry point ---
+
+
 def main():
     """Entry point for the MCP server (stdio transport)."""
+    # MCP uses stdio by default — the agent process talks to us over stdin/stdout
     mcp.run(transport="stdio")
 
 

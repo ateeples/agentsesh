@@ -139,6 +139,11 @@ def search_thinking(
 
 
 # --- Dotnotes: dot-notation path indexing ---
+# Dotnotes extract structured references from thinking text,
+# like "config.database.pool_size" or "auth.middleware.verify".
+# This lets you search agent reasoning by concept path rather
+# than substring, revealing which parts of the codebase the
+# agent was thinking about at each decision point.
 
 
 def extract_dotnotes(text: str) -> list[str]:
@@ -219,6 +224,11 @@ def search_dotnotes(
 
 
 # --- Pattern correlation: connect antipatterns to decision points ---
+# This bridges two coordinate systems:
+# - Patterns use tool_indices (position in flat tool-call list)
+# - Decision points use ReplayStep.seq (position in full timeline)
+# The correlation maps each detected anti-pattern back to the
+# thinking block that caused the problematic behavior.
 
 
 def correlate_patterns(

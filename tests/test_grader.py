@@ -1,8 +1,17 @@
-"""Tests for session grading."""
+"""Tests for session grading.
+
+Covers: grade scale (A+ through F), deduction mechanics (error rate,
+blind edits, error streaks, bash anti-patterns), bonus mechanics
+(high read ratio, parallel calls), and edge cases (empty sessions,
+custom weights).
+"""
 
 import pytest
 from sesh.parsers.base import ToolCall
 from sesh.analyzers.grader import grade_session, GRADE_SCALE
+
+
+# --- Test helper ---
 
 
 def _tc(name: str, input_data: dict | None = None, is_error: bool = False, seq: int = 0, timestamp: str | None = None) -> ToolCall:
@@ -16,6 +25,9 @@ def _tc(name: str, input_data: dict | None = None, is_error: bool = False, seq: 
         timestamp=timestamp,
         seq=seq,
     )
+
+
+# --- Grade calculation: deductions, bonuses, and final grade ---
 
 
 class TestGrading:

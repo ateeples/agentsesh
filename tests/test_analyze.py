@@ -205,6 +205,9 @@ def _session_with_errors() -> list[dict]:
 # ============================================================
 
 
+# --- Stats extraction from tool calls ---
+
+
 class TestExtractStats:
     def test_basic_stats(self):
         tcs = [
@@ -321,6 +324,9 @@ class TestEstimateCost:
 # ============================================================
 
 
+# --- Failure point identification ---
+
+
 class TestIdentifyFailurePoints:
     def test_blind_edit_failure_point(self):
         patterns = [
@@ -371,6 +377,9 @@ class TestIdentifyFailurePoints:
 # ============================================================
 # generate_summary
 # ============================================================
+
+
+# --- Summary generation ---
 
 
 class TestGenerateSummary:
@@ -437,6 +446,9 @@ class TestCalculateEffectiveTime:
 # ============================================================
 # format_analysis
 # ============================================================
+
+
+# --- Human-readable output formatting ---
 
 
 class TestFormatAnalysis:
@@ -553,6 +565,9 @@ class TestAnalysisToJson:
 # ============================================================
 # analyze_session (integration)
 # ============================================================
+
+
+# --- Full pipeline integration ---
 
 
 class TestAnalyzeSession:

@@ -47,15 +47,19 @@ from .audit.engine import run_audit
 from .audit.formatter import format_audit_report, audit_to_json
 
 
+# --- Database and config resolution ---
+
+
 def _get_db(args) -> Database:
     """Get database connection, finding .sesh/ dir automatically."""
+    # Priority: explicit --db flag > .sesh/config.json > .sesh/ discovery
     if hasattr(args, "db") and args.db:
         return Database(args.db)
 
     config_path = find_config()
     if config_path:
         config = Config(config_path)
-        # Resolve db_path relative to .sesh/ parent
+        # Resolve db_path relative to .sesh/ parent (config lives in .sesh/)
         sesh_parent = config_path.parent.parent
         return Database(sesh_parent / config.db_path)
 
@@ -73,6 +77,11 @@ def _get_config() -> Config:
     return Config(config_path)
 
 
+# --- Subcommands ---
+# Each cmd_* function handles one CLI subcommand.
+# All follow the pattern: resolve args → get DB → do work → close DB.
+
+
 def cmd_init(args) -> None:
     """Initialize .sesh/ in current directory."""
     sesh_dir = Path.cwd() / ".sesh"
@@ -82,15 +91,15 @@ def cmd_init(args) -> None:
 
     sesh_dir.mkdir()
 
-    # Create config
+    # Create config with defaults
     config = Config()
     config.save(sesh_dir / "config.json")
 
-    # Create database (triggers schema creation)
+    # Create database (constructor triggers schema creation)
     db = Database(sesh_dir / "sesh.db")
     db.close()
 
-    # Create .gitignore for .sesh/
+    # Gitignore: allow config but exclude DB (may contain transcript data)
     gitignore = sesh_dir / ".gitignore"
     gitignore.write_text("# sesh database may contain sensitive data\n*\n!.gitignore\n!config.json\n")
 
@@ -105,6 +114,7 @@ def cmd_log(args) -> None:
     config = _get_config()
     db = _get_db(args)
 
+    # Resolve input: single file or batch directory
     paths = []
     if args.dir:
         dir_path = Path(args.dir)
@@ -118,6 +128,7 @@ def cmd_log(args) -> None:
         print("Error: Provide a file or --dir", file=sys.stderr)
         sys.exit(2)
 
+    # Track ingestion results for summary
     ingested = 0
     skipped = 0
     errors = 0
@@ -357,17 +368,21 @@ def cmd_fix(args) -> None:
 
 
 def cmd_test(args) -> None:
-    """Compare outcome metrics between sessions (behavioral regression testing)."""
+    """Compare outcome metrics between sessions (behavioral regression testing).
+
+    Extracts test/build/lint results from two sessions and compares them.
+    Shows improvements, regressions, and unchanged metrics.
+    """
     db = _get_db(args)
 
-    # Resolve session IDs
+    # Need session list for auto-resolution when IDs not specified
     sessions = db.list_sessions(limit=20)
     if not sessions:
         print("No sessions found. Run `sesh log` first.", file=sys.stderr)
         sys.exit(3)
 
+    # Session resolution: explicit pair, one vs most-recent, or two most-recent
     if args.session_a and args.session_b:
-        # Compare two specific sessions
         session_a = db.get_session(args.session_a)
         session_b = db.get_session(args.session_b)
         if not session_a:
@@ -377,7 +392,7 @@ def cmd_test(args) -> None:
             print(f"Session not found: {args.session_b}", file=sys.stderr)
             sys.exit(4)
     elif args.session_a:
-        # Compare one session against most recent
+        # Compare specified session (baseline) against most recent (candidate)
         session_a = db.get_session(args.session_a)
         if not session_a:
             print(f"Session not found: {args.session_a}", file=sys.stderr)
@@ -391,12 +406,12 @@ def cmd_test(args) -> None:
             print("Need at least 2 sessions to compare.", file=sys.stderr)
             sys.exit(3)
     else:
-        # Compare two most recent sessions
+        # No session specified: compare two most recent (older=baseline, newer=candidate)
         if len(sessions) < 2:
             print("Need at least 2 sessions to compare.", file=sys.stderr)
             sys.exit(3)
-        session_a = db.get_session(sessions[1]["id"])  # older
-        session_b = db.get_session(sessions[0]["id"])  # newer
+        session_a = db.get_session(sessions[1]["id"])  # older = baseline
+        session_b = db.get_session(sessions[0]["id"])  # newer = candidate
 
     tc_a = db.get_tool_calls(session_a["id"])
     tc_b = db.get_tool_calls(session_b["id"])
@@ -475,7 +490,8 @@ def cmd_replay(args) -> None:
 
     tool_calls = db.get_tool_calls(session["id"])
 
-    # Build timeline — prefer source file for full fidelity
+    # Build timeline — prefer source JSONL for full fidelity (includes thinking blocks),
+    # fall back to DB-only (tool calls only, no thinking context)
     source_path = session.get("source_path") if not args.db_only else None
     steps, source = build_timeline(tool_calls, source_path=source_path)
 
@@ -486,7 +502,8 @@ def cmd_replay(args) -> None:
 
     # Annotate with patterns if requested
     if args.annotate:
-        # Re-detect patterns to get tool_indices (DB patterns don't store them)
+        # Re-detect patterns from raw tool calls to get tool_indices
+        # (DB-stored patterns don't preserve index info)
         tc_objects = [
             ToolCall(
                 name=tc["name"],
@@ -557,7 +574,11 @@ def cmd_replay(args) -> None:
 
 
 def cmd_debug(args) -> None:
-    """Debug a session — search thinking blocks to understand agent reasoning."""
+    """Debug a session — search thinking blocks to understand agent reasoning.
+
+    Four modes: thinking search (default), action reverse lookup (--action),
+    dotnotes path search (--dotnotes), pattern correlation (--correlate).
+    """
     db = _get_db(args)
 
     if args.session_id:
@@ -602,10 +623,10 @@ def cmd_debug(args) -> None:
         db.close()
         sys.exit(6)
 
-    # Correlate mode: map antipatterns to decision points
+    # Mode dispatch: correlate, dotnotes, action lookup, or thinking search
     query = args.query
     if args.correlate:
-        # Reconstruct ToolCall objects and re-detect patterns to get tool_indices
+        # Correlate mode: map each antipattern to the thinking that caused it
         tc_objects = _tool_calls_to_objects(tool_calls)
         patterns_with_indices = redetect_patterns(tc_objects)
 
@@ -678,7 +699,7 @@ def cmd_debug(args) -> None:
         db.close()
         return
 
-    # Search or list all decision points
+    # Default mode: search thinking text, or reverse-lookup by action
     if query and args.action:
         results = lookup_by_action(dps, query)
     elif query:
@@ -896,15 +917,19 @@ def _print_correlate_results(
 
 
 def cmd_watch(args) -> None:
-    """Watch directories for new sessions and auto-ingest."""
+    """Watch directories for new sessions and auto-ingest.
+
+    Polls session directories for new JSONL files. Files must be
+    unchanged for --settle seconds before ingestion (avoids partial reads).
+    """
     config = _get_config()
     db = _get_db(args)
 
+    # Resolve directories: explicit args or auto-discover from ~/.claude/
     directories = []
     if args.dirs:
         directories = [Path(d) for d in args.dirs]
     else:
-        # Auto-discover
         directories = discover_session_dirs()
         if not directories:
             print(
@@ -947,7 +972,11 @@ def cmd_watch(args) -> None:
 
 
 def cmd_analyze(args) -> None:
-    """One-command session analysis — no database required."""
+    """One-command session analysis — no database required.
+
+    Point at a JSONL transcript, get: stats, grade, patterns,
+    failure points, remediations, and summary.
+    """
     path = Path(args.file)
     if not path.exists():
         print(f"Error: File not found: {args.file}", file=sys.stderr)
@@ -987,8 +1016,11 @@ def cmd_audit(args) -> None:
         print(format_audit_report(result))
 
 
+# --- CLI entry point and argument parsing ---
+
+
 def main() -> None:
-    """Main CLI entry point."""
+    """Main CLI entry point — parse args and dispatch to subcommand handler."""
     parser = argparse.ArgumentParser(
         prog="sesh",
         description="Agent Session Intelligence — behavioral analysis, grading, and handoff for AI agent sessions",
@@ -1001,17 +1033,18 @@ def main() -> None:
 
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
-    # init
+    # --- Subcommand definitions ---
+    # --- Setup commands ---
     sub.add_parser("init", help="Initialize .sesh/ in current directory")
 
-    # log
+    # --- Ingestion commands ---
     log_p = sub.add_parser("log", help="Ingest session transcript(s)")
     log_p.add_argument("file", nargs="?", help="Transcript file path")
     log_p.add_argument("--dir", help="Batch ingest all files in directory")
     log_p.add_argument("--format", choices=["claude_code", "openai", "generic", "auto"], default="auto",
                        help="Transcript format (default: auto-detect)")
 
-    # reflect
+    # --- Analysis commands (require DB) ---
     reflect_p = sub.add_parser("reflect", help="Analyze a session")
     reflect_p.add_argument("session_id", nargs="?", help="Session ID (default: most recent)")
     reflect_p.add_argument("--json", action="store_true", help="Output as JSON")
@@ -1080,7 +1113,7 @@ def main() -> None:
     debug_p.add_argument("--json", action="store_true", help="Output as JSON")
     debug_p.add_argument("--verbose", "-v", action="store_true", help="Show full thinking blocks")
 
-    # analyze
+    # --- Standalone commands (no DB required) ---
     analyze_p = sub.add_parser("analyze", help="One-command session diagnostic (no database required)")
     analyze_p.add_argument("file", help="Path to session transcript (JSONL)")
     analyze_p.add_argument("--json", action="store_true", help="Output as JSON")
@@ -1095,7 +1128,7 @@ def main() -> None:
     audit_p.add_argument("--metric", help="Run only one metric (e.g. bootstrap, file_discipline)")
     audit_p.add_argument("--json", action="store_true", help="Output as JSON")
 
-    # watch
+    # --- Background/daemon commands ---
     watch_p = sub.add_parser("watch", help="Auto-ingest new sessions from directories")
     watch_p.add_argument("dirs", nargs="*", help="Directories to watch (default: auto-discover)")
     watch_p.add_argument("--interval", type=float, default=30.0,
@@ -1105,12 +1138,14 @@ def main() -> None:
     watch_p.add_argument("--once", action="store_true",
                          help="Scan once and exit (don't poll)")
 
+    # --- Dispatch ---
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
         sys.exit(0)
 
+    # Command dispatch table — maps subcommand name to handler function
     commands = {
         "init": cmd_init,
         "log": cmd_log,

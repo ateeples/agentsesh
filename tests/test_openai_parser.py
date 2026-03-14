@@ -1,4 +1,9 @@
-"""Tests for OpenAI Codex CLI transcript parser."""
+"""Tests for OpenAI Codex CLI transcript parser.
+
+Covers: format detection, session meta extraction, tool call parsing,
+error detection from output text, auto-detect priority, and
+edge cases (missing fields, empty sessions, interleaved types).
+"""
 
 import json
 import tempfile
@@ -8,6 +13,9 @@ import pytest
 
 from sesh.parsers.openai_codex import OpenAICodexParser, _is_tool_error, _parse_tool_output
 from sesh.parsers import auto_detect_parser, parse_transcript
+
+
+# --- Test helpers ---
 
 
 def _write_jsonl(lines: list[dict], path: Path):
@@ -138,6 +146,9 @@ def _make_agent_message(text="Done. Fixed the bug.", timestamp="2026-01-15T10:05
     }
 
 
+# --- Format detection ---
+
+
 class TestCanParse:
     def test_valid_codex_transcript(self, tmp_path):
         f = tmp_path / "rollout-test.jsonl"
@@ -168,6 +179,9 @@ class TestCanParse:
         f = tmp_path / "empty.jsonl"
         f.write_text("")
         assert OpenAICodexParser.can_parse(f) is False
+
+
+# --- Full parsing: tool calls, models, timing ---
 
 
 class TestParse:
@@ -273,6 +287,9 @@ class TestParse:
         assert "read" in session.tool_calls[0].categories
 
 
+# --- Auto-detection dispatch with Claude Code priority ---
+
+
 class TestAutoDetection:
     def test_auto_detects_codex(self, tmp_path):
         f = tmp_path / "rollout.jsonl"
@@ -298,6 +315,9 @@ class TestAutoDetection:
         _write_jsonl([_make_session_meta("hint-test")], f)
         session = parse_transcript(f, format_hint="openai_codex")
         assert session.session_id == "hint-test"
+
+
+# --- Error detection helpers ---
 
 
 class TestErrorHelpers:

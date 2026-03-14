@@ -2,6 +2,11 @@
 
 Solves context rot by extracting the essential state from a session
 into a format that can be prepended to the next session's context.
+
+Output sections:
+- What was done: files touched, commands run
+- State: unresolved errors, failing tests
+- Process notes: patterns detected, remediation hints
 """
 
 from collections import Counter

@@ -38,3 +38,16 @@ Repository = "https://github.com/ateeples/agentsesh"
 
 [tool.setuptools.packages.find]
 include = ["sesh*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

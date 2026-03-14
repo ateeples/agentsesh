@@ -1,4 +1,9 @@
-"""Tests for behavioral pattern detection."""
+"""Tests for behavioral pattern detection.
+
+Each pattern detector is tested independently with synthetic tool call
+sequences. Tests verify both positive detection (pattern present) and
+negative detection (pattern absent / below threshold).
+"""
 
 import pytest
 from sesh.parsers.base import ToolCall
@@ -16,6 +21,9 @@ from sesh.analyzers.patterns import (
 )
 
 
+# --- Test helper ---
+
+
 def _tc(name: str, input_data: dict | None = None, is_error: bool = False, seq: int = 0) -> ToolCall:
     """Helper to create a ToolCall with minimal boilerplate."""
     return ToolCall(
@@ -27,6 +35,9 @@ def _tc(name: str, input_data: dict | None = None, is_error: bool = False, seq: 
         is_error=is_error,
         seq=seq,
     )
+
+
+# --- Individual pattern detector tests ---
 
 
 class TestRepeatedSearches:
@@ -54,6 +65,9 @@ class TestRepeatedSearches:
             _tc("Read", {"file_path": "/a.py"}, seq=1),
         ]
         assert detect_repeated_searches(calls) == []
+
+
+# --- Write-without-read: editing a file you haven't Read first ---
 
 
 class TestWriteWithoutRead:
@@ -99,6 +113,9 @@ class TestWriteWithoutRead:
         assert len(patterns) == 1
 
 
+# --- Error rate: overall session error percentage ---
+
+
 class TestErrorRate:
     def test_no_errors(self):
         calls = [_tc("Read", seq=i) for i in range(5)]
@@ -125,6 +142,9 @@ class TestErrorRate:
         assert detect_error_rate([]) == []
 
 
+# --- Error streak: consecutive failures indicating the agent is stuck ---
+
+
 class TestErrorStreak:
     def test_no_streak(self):
         calls = [
@@ -144,6 +164,9 @@ class TestErrorStreak:
         assert len(patterns) == 1
         assert patterns[0].type == "error_streak"
         assert "3 consecutive" in patterns[0].detail
+
+
+# --- Low read ratio: writing too much relative to reading ---
 
 
 class TestLowReadRatio:
@@ -168,6 +191,9 @@ class TestLowReadRatio:
     def test_too_few_calls(self):
         calls = [_tc("Read", seq=0), _tc("Edit", seq=1)]
         assert detect_low_read_ratio(calls) == []
+
+
+# --- Bash overuse: using Bash for tasks with dedicated tools ---
 
 
 class TestBashOveruse:
@@ -225,6 +251,9 @@ class TestBashOveruse:
         assert "3/" in patterns[0].detail  # 3 out of 4 bash calls
 
 
+# --- Write-then-read: acting before understanding ---
+
+
 class TestWriteThenRead:
     def test_too_few_calls(self):
         calls = [_tc("Write", seq=i) for i in range(5)]
@@ -235,6 +264,9 @@ class TestWriteThenRead:
         calls = [_tc("Read", seq=i) for i in range(10)]
         calls += [_tc("Edit", seq=i + 10) for i in range(5)]
         assert detect_write_then_read(calls) == []
+
+
+# --- Scattered files: editing across too many directories ---
 
 
 class TestScatteredFiles:
@@ -257,6 +289,9 @@ class TestScatteredFiles:
         assert detect_scattered_files(calls) == []
 
 
+# --- Missed parallelism: consecutive reads that could have been batched ---
+
+
 class TestMissedParallelism:
     def test_no_missed(self):
         calls = [
@@ -274,6 +309,9 @@ class TestMissedParallelism:
         patterns = detect_missed_parallelism(calls)
         assert len(patterns) == 1
         assert patterns[0].type == "missed_parallelism"
+
+
+# --- Integration: detect_all_patterns ---
 
 
 class TestDetectAll:

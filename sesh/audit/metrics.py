@@ -13,13 +13,15 @@ from pathlib import Path
 
 from .engine import Finding, MetricResult, register_metric
 
-# File extensions considered "source code" for file_discipline
+# File extensions considered "source code" for file_discipline and comment density.
+# Intentionally conservative — only well-known language extensions.
 _SOURCE_EXTENSIONS = frozenset({
     ".py", ".ts", ".js", ".tsx", ".jsx", ".rs", ".go", ".java",
     ".cpp", ".c", ".h", ".hpp", ".cs", ".rb", ".kt", ".swift",
 })
 
-# Directories to always skip when walking
+# Directories to always skip when walking the repo tree.
+# These are build artifacts, package caches, and generated code.
 _SKIP_DIRS = frozenset({
     "node_modules", ".git", "__pycache__", "dist", "build",
     ".tox", ".venv", "venv", ".eggs", "target", ".next",
@@ -33,12 +35,16 @@ _SKIP_DIRS = frozenset({
 
 
 def detect_bootstrap(repo_path: Path, config: dict) -> MetricResult:
-    """Can an agent set up from scratch?"""
+    """Can an agent set up from scratch?
+
+    Checks for: setup/build script (3pts), dependency file (4pts),
+    README with install steps (3pts). Max 10.
+    """
     score = 0
     findings = []
     recs = []
 
-    # Setup script
+    # Setup/build script — how does the agent install this project?
     setup_files = [
         "pyproject.toml", "setup.py", "setup.cfg", "package.json",
         "Cargo.toml", "go.mod", "CMakeLists.txt", "build.gradle",
@@ -102,7 +108,11 @@ def detect_bootstrap(repo_path: Path, config: dict) -> MetricResult:
 
 
 def detect_task_entry_points(repo_path: Path, config: dict) -> MetricResult:
-    """Are build/test/lint/run discoverable?"""
+    """Are build/test/lint/run discoverable?
+
+    Checks: package.json scripts (4pts), Makefile targets (3pts),
+    pyproject.toml scripts (3pts). Max 10.
+    """
     score = 0
     findings = []
     recs = []
@@ -174,7 +184,10 @@ def detect_task_entry_points(repo_path: Path, config: dict) -> MetricResult:
 
 
 def detect_validation_harness(repo_path: Path, config: dict) -> MetricResult:
-    """Can the agent verify changes?"""
+    """Can the agent verify changes?
+
+    Checks: test files (3pts), test config (3pts), CI config (4pts). Max 10.
+    """
     score = 0
     findings = []
     recs = []
@@ -272,7 +285,11 @@ def detect_validation_harness(repo_path: Path, config: dict) -> MetricResult:
 
 
 def detect_linting(repo_path: Path, config: dict) -> MetricResult:
-    """Can the agent self-check quality?"""
+    """Can the agent self-check quality?
+
+    Checks: ESLint (3pts), Ruff (3pts), Prettier (2pts), Pylint (2pts),
+    Biome (3pts). Max 10. Multiple tools stack.
+    """
     score = 0
     findings = []
     recs = []
@@ -353,7 +370,11 @@ def detect_linting(repo_path: Path, config: dict) -> MetricResult:
 
 
 def detect_codebase_map(repo_path: Path, config: dict) -> MetricResult:
-    """Is there a navigation doc?"""
+    """Is there a navigation doc?
+
+    Checks: ARCHITECTURE.md (4pts), agent-aware docs like CLAUDE.md (3pts),
+    directory-level READMEs (1-3pts). Max 10.
+    """
     score = 0
     findings = []
     recs = []
@@ -410,7 +431,11 @@ def detect_codebase_map(repo_path: Path, config: dict) -> MetricResult:
 
 
 def detect_doc_structure(repo_path: Path, config: dict) -> MetricResult:
-    """Is documentation organized?"""
+    """Is documentation organized?
+
+    Checks: substantive README (4pts), docs/ directory (3pts),
+    inline comment density >=5% (3pts). Max 10.
+    """
     score = 0
     findings = []
     recs = []
@@ -491,7 +516,11 @@ def detect_doc_structure(repo_path: Path, config: dict) -> MetricResult:
 
 
 def detect_decision_records(repo_path: Path, config: dict) -> MetricResult:
-    """Are choices documented?"""
+    """Are choices documented?
+
+    Checks: ADR directory with .md files (5pts), CHANGELOG with >20 lines (5pts).
+    Max 10.
+    """
     score = 0
     findings = []
     recs = []
@@ -551,7 +580,11 @@ def detect_decision_records(repo_path: Path, config: dict) -> MetricResult:
 
 
 def detect_agent_instructions(repo_path: Path, config: dict) -> MetricResult:
-    """Is there agent-specific guidance?"""
+    """Is there agent-specific guidance?
+
+    Checks: CLAUDE.md (5pts), AGENTS.md (3pts), .cursorrules (2pts),
+    copilot-instructions.md (2pts). Max 10.
+    """
     score = 0
     findings = []
     recs = []
@@ -588,7 +621,11 @@ def detect_agent_instructions(repo_path: Path, config: dict) -> MetricResult:
 
 
 def detect_file_discipline(repo_path: Path, config: dict) -> MetricResult:
-    """Are files kept navigable?"""
+    """Are files kept navigable?
+
+    Starts at 10 and deducts for: largest file >2x threshold (-3) or >1x (-1),
+    average >300 lines (-2), >20% files over threshold (-3) or >10% (-1).
+    """
     max_loc_threshold = config.get("file_discipline_max_loc", 500)
     sample_limit = config.get("file_discipline_sample_limit", 200)
 
@@ -658,7 +695,11 @@ def detect_file_discipline(repo_path: Path, config: dict) -> MetricResult:
 
 
 def _walk_source_files(repo_path: Path, limit: int = 200):
-    """Walk source files in repo, skipping build/vendor dirs. Yields Paths."""
+    """Walk source files in repo, skipping build/vendor dirs.
+
+    Yields Path objects for files matching _SOURCE_EXTENSIONS.
+    Capped at `limit` to prevent slow scans on huge repos.
+    """
     count = 0
     for root, dirs, files in repo_path.walk():
         # Prune skip dirs
@@ -674,7 +715,8 @@ def _walk_source_files(repo_path: Path, limit: int = 200):
 
 
 # ============================================================
-# Self-registration
+# Self-registration — all detectors register at import time
+# so the audit engine discovers them without explicit wiring.
 # ============================================================
 
 _ALL_DETECTORS = [

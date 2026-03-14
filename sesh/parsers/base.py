@@ -66,7 +66,9 @@ class NormalizedSession:
     metadata: dict = field(default_factory=dict)
 
 
-# Tool classification map
+# Tool classification map — maps behavioral roles to tool names.
+# A tool can belong to multiple categories (e.g., Grep is both read and search).
+# Used by pattern detectors to reason about tool call sequences.
 TOOL_CATEGORIES: dict[str, set[str]] = {
     "read": {"Read", "Grep", "Glob", "Bash"},
     "write": {"Write", "Edit", "NotebookEdit"},

@@ -1,4 +1,9 @@
-"""Tests for session replay timeline builder and formatter."""
+"""Tests for session replay timeline builder and formatter.
+
+Covers: source-file timeline (full fidelity with thinking blocks),
+DB-only timeline (tool calls only), annotation with patterns,
+step filtering (by error, range, tool name), and output formatting.
+"""
 
 import json
 import tempfile
@@ -17,6 +22,9 @@ from sesh.replay import (
     parse_range,
 )
 from sesh.parsers.base import Pattern
+
+
+# --- Test helper ---
 
 
 def _tc(name, input_data=None, is_error=False, output_preview="", seq=0, timestamp=None):
@@ -54,6 +62,9 @@ def _write_jsonl(lines):
         f.write(line + "\n")
     f.close()
     return f.name
+
+
+# --- DB-only timeline tests ---
 
 
 class TestBuildTimelineFromDB:
@@ -100,6 +111,9 @@ class TestBuildTimelineFromDB:
         assert '"*.py"' in steps[1].summary
         assert "explore codebase" in steps[2].summary
         assert "commit" in steps[3].summary
+
+
+# --- Source-file timeline tests (full fidelity) ---
 
 
 class TestBuildTimelineFromSource:
@@ -271,6 +285,9 @@ class TestBuildTimeline:
         assert source == "db"
 
 
+# --- Pattern annotation tests ---
+
+
 class TestAnnotateTimeline:
     def test_annotates_correct_steps(self):
         steps = [
@@ -325,6 +342,9 @@ class TestAnnotateTimeline:
         assert steps[0].annotations == []
 
 
+# --- Step filtering tests ---
+
+
 class TestFilterSteps:
     def _sample_steps(self):
         return [
@@ -371,6 +391,9 @@ class TestFilterSteps:
         )
         assert len(result) == 2
         assert all(s.type == "tool_call" for s in result)
+
+
+# --- Output formatting tests ---
 
 
 class TestFormatReplay:
@@ -441,6 +464,9 @@ class TestFormatReplay:
 
         db_output = format_replay(steps, session, source="db")
         assert "database" in db_output
+
+
+# --- Range parsing tests ---
 
 
 class TestParseRange:

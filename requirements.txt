@@ -1,0 +1,5 @@
+# AgentSesh has zero required dependencies.
+# Optional dependencies listed below.
+
+# MCP server support (optional)
+# mcp>=1.0

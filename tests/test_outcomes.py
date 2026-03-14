@@ -1,4 +1,8 @@
-"""Tests for outcome-focused session analysis."""
+"""Tests for outcome-focused session analysis.
+
+Covers: outcome extraction (test/build/lint counts, error loops, rework),
+session comparison (improvements, regressions, verdict), and formatting.
+"""
 
 import json
 import pytest
@@ -12,6 +16,9 @@ from sesh.analyzers.outcomes import (
 )
 
 
+# --- Test helper ---
+
+
 def _tc(name, input_data=None, is_error=False, output_preview="", seq=0):
     """Helper to create a tool call dict matching DB format."""
     return {
@@ -21,6 +28,9 @@ def _tc(name, input_data=None, is_error=False, output_preview="", seq=0):
         "output_preview": output_preview,
         "seq": seq,
     }
+
+
+# --- Outcome extraction from tool calls ---
 
 
 class TestExtractOutcomes:
@@ -52,6 +62,8 @@ class TestExtractOutcomes:
         assert abs(m.success_rate - 2 / 3) < 0.01
 
     def test_rework_detection(self):
+        # Editing the same file multiple times indicates rework — the agent
+        # had to come back and fix something it already touched
         calls = [
             _tc("Edit", {"file_path": "/a.py"}, seq=0),
             _tc("Edit", {"file_path": "/b.py"}, seq=1),
@@ -74,6 +86,8 @@ class TestExtractOutcomes:
         assert m.rework_edits == 0
 
     def test_error_retry_loop(self):
+        # Error retry loop: same tool on same file, error → error → success.
+        # Counts the number of times the agent retried the same failed operation.
         calls = [
             _tc("Edit", {"file_path": "/a.py"}, is_error=True, seq=0),
             _tc("Edit", {"file_path": "/a.py"}, is_error=True, seq=1),  # retry, still error
@@ -91,6 +105,7 @@ class TestExtractOutcomes:
         m = extract_outcomes(calls)
         assert m.error_retry_loops == 0
 
+    # Terminal state: did the session end cleanly or on an error?
     def test_terminal_state_clean(self):
         calls = [
             _tc("Read", seq=0),
@@ -111,6 +126,7 @@ class TestExtractOutcomes:
         assert m.ended_on_error
         assert m.final_error_streak == 2
 
+    # Verification detection: test, build, and lint commands in Bash output
     def test_test_detection_pass(self):
         calls = [
             _tc("Bash", {"command": "pytest tests/"}, seq=0),
@@ -159,6 +175,9 @@ class TestExtractOutcomes:
         m = extract_outcomes(calls)
         assert m.test_runs == 0
         assert m.build_runs == 0
+
+
+# --- Session comparison (improvements, regressions) ---
 
 
 class TestCompareOutcomes:
@@ -252,6 +271,9 @@ class TestCompareOutcomes:
         candidate = OutcomeMetrics(total_tool_calls=8, success_rate=1.0)
         comp = compare_outcomes(baseline, candidate)
         assert any("stopped running tests" in i for i in comp.regressions)
+
+
+# --- Output formatting ---
 
 
 class TestFormatting:

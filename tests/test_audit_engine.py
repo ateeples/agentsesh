@@ -2,6 +2,9 @@
 
 Tests the scoring engine independently of any metric detectors.
 Metrics are injected as test fixtures, not imported from real detectors.
+
+Covers: score-to-grade mapping, metric combination, metric registration,
+selective metric execution, and audit result construction.
 """
 
 import pytest
@@ -18,6 +21,9 @@ from sesh.audit.engine import (
     run_audit,
     _REGISTRY,
 )
+
+
+# --- Score-to-grade mapping (0-100 → A+ through F) ---
 
 
 class TestScoreToGrade:

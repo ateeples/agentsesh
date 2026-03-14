@@ -1,4 +1,8 @@
-"""Tests for CLI commands — roundtrip integration tests."""
+"""Tests for CLI commands — roundtrip integration tests.
+
+Tests run CLI subcommands as subprocesses to verify end-to-end behavior:
+init, log, reflect, analyze, audit, and watch --once.
+"""
 
 import json
 import subprocess
@@ -7,6 +11,9 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
+
+# --- Test helpers ---
 
 
 def _write_jsonl(path: Path, lines: list[dict]) -> None:
@@ -70,6 +77,9 @@ def _run_sesh(*args, cwd=None) -> subprocess.CompletedProcess:
         cwd=cwd,
         env=env,
     )
+
+
+# --- CLI integration tests (subprocess-based) ---
 
 
 class TestCLIRoundtrip:
@@ -156,6 +166,9 @@ class TestCLIRoundtrip:
         result = _run_sesh("log", "--dir", str(sessions_dir), cwd=tmp_path)
         assert result.returncode == 0
         assert "Ingested 3" in result.stdout
+
+
+# --- sesh analyze (no-DB) CLI tests ---
 
 
 class TestAnalyzeCLI:
