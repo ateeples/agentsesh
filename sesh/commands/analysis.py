@@ -253,16 +253,23 @@ def cmd_audit(args) -> None:
         sys.exit(1)
 
     enabled = [args.metric] if args.metric else None
-    result = run_audit(path, enabled=enabled)
+    threshold = getattr(args, "threshold", None)
 
-    if args.json:
-        print(audit_to_json(result))
+    # Animated output for interactive TTY (not JSON, not CI threshold)
+    if not args.json and sys.stdout.isatty() and threshold is None:
+        from ..audit.formatter import print_audit_animated
+        result = print_audit_animated(path, enabled=enabled)
     else:
-        print(format_audit_report(result))
+        result = run_audit(path, enabled=enabled)
+        if args.json:
+            if threshold is not None and result.score < threshold:
+                print(f"Failed: score {result.score} < threshold {threshold}", file=sys.stderr)
+            print(audit_to_json(result))
+        else:
+            if threshold is not None and result.score < threshold:
+                print(f"Failed: score {result.score} < threshold {threshold}", file=sys.stderr)
+            print(format_audit_report(result))
 
     # CI gate: non-zero exit if score below threshold
-    threshold = getattr(args, "threshold", None)
     if threshold is not None and result.score < threshold:
-        if not args.json:
-            print(f"\nFailed: score {result.score} < threshold {threshold}", file=sys.stderr)
         sys.exit(1)
