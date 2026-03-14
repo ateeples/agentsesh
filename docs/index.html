@@ -4,24 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>sesh — Agent Session Intelligence</title>
-<meta name="description" content="Two commands. Zero setup. Analyze AI coding sessions and grade repo readiness. Closed-loop improvement for Claude Code and OpenAI Codex agents.">
+<meta name="description" content="Find out why your AI coding sessions fail. Two commands, zero setup, zero dependencies.">
 <style>
   :root {
     --bg: #0a0a0a;
-    --surface: #141414;
-    --border: #222;
-    --text: #e0e0e0;
-    --dim: #666;
-    --accent: #4a9eff;
-    --green: #4a9;
-    --amber: #da3;
-    --red: #e55;
+    --surface: #111;
+    --border: #1e1e1e;
+    --text: #d4d4d4;
+    --dim: #555;
+    --muted: #888;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
-    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Menlo', monospace;
     background: var(--bg);
     color: var(--text);
     line-height: 1.7;
@@ -29,207 +26,172 @@
   }
 
   .container {
-    max-width: 720px;
+    max-width: 640px;
     margin: 0 auto;
     padding: 0 24px;
   }
 
   /* Hero */
   .hero {
-    padding: 80px 0 60px;
-    text-align: center;
+    padding: 80px 0 48px;
   }
 
-  .hero h1 {
-    font-size: 48px;
-    font-weight: 700;
-    letter-spacing: -1px;
-    margin-bottom: 16px;
+  .logo {
+    font-size: 20px;
+    line-height: 1.3;
+    letter-spacing: 0.5px;
+    margin-bottom: 24px;
+    color: var(--text);
   }
 
-  .hero h1 span { color: var(--accent); }
-
-  .hero .tagline {
-    font-size: 18px;
-    color: var(--dim);
+  .pitch {
+    font-size: 17px;
+    color: var(--muted);
     margin-bottom: 32px;
+    max-width: 480px;
+    line-height: 1.6;
   }
 
   .install-box {
     display: inline-block;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 28px;
-    font-size: 16px;
+    border-radius: 6px;
+    padding: 12px 24px;
+    font-size: 15px;
     cursor: pointer;
     transition: border-color 0.2s;
     position: relative;
   }
 
-  .install-box:hover { border-color: var(--accent); }
+  .install-box:hover { border-color: var(--muted); }
   .install-box .prompt { color: var(--dim); }
-  .install-box .cmd { color: var(--green); }
 
   .install-box .copied {
     position: absolute;
-    top: -28px;
+    top: -24px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 12px;
-    color: var(--green);
+    font-size: 11px;
+    color: var(--muted);
     opacity: 0;
     transition: opacity 0.2s;
   }
 
   .install-box .copied.show { opacity: 1; }
 
-  .version {
+  .meta {
     margin-top: 16px;
-    font-size: 13px;
+    font-size: 12px;
     color: var(--dim);
   }
 
-  .version a { color: var(--accent); text-decoration: none; }
-  .version a:hover { text-decoration: underline; }
+  .meta a { color: var(--muted); text-decoration: none; }
+  .meta a:hover { text-decoration: underline; }
 
-  /* Sections */
-  section {
+  /* Demos */
+  .demos {
     padding: 48px 0;
     border-top: 1px solid var(--border);
   }
 
-  section h2 {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 24px;
-    letter-spacing: -0.5px;
+  .demo-pair {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
   }
 
-  section .subtitle {
+  .demo-block h2 {
     font-size: 14px;
+    font-weight: 400;
     color: var(--dim);
-    margin-top: -16px;
-    margin-bottom: 24px;
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
   }
 
-  /* Terminal demo */
-  .demo {
+  .terminal {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 24px;
-    font-size: 14px;
+    font-size: 13px;
+    line-height: 1.8;
     white-space: pre;
     overflow-x: auto;
-    line-height: 1.8;
-    margin-bottom: 16px;
   }
 
-  .demo .g { color: var(--green); }
-  .demo .a { color: var(--amber); }
-  .demo .r { color: var(--red); }
-  .demo .d { color: var(--dim); }
-  .demo .b { color: var(--accent); }
-  .demo .prompt { color: var(--dim); }
+  .terminal .d { color: var(--dim); }
+  .terminal .m { color: var(--muted); }
 
-  .demo + .demo-label {
-    font-size: 12px;
-    color: var(--dim);
-    text-align: right;
-    margin-top: -12px;
-    margin-bottom: 24px;
+  /* Animated audit bars */
+  .bar-fill {
+    display: inline-block;
+    overflow: hidden;
+    max-width: 0;
+    transition: max-width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    vertical-align: bottom;
   }
 
-  /* Features grid */
-  .features {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
+  .bar-fill.visible { max-width: 10em; }
+
+  .bar-empty {
+    opacity: 0;
+    transition: opacity 0.3s ease 0.5s;
   }
 
-  .feature {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
+  .bar-empty.visible { opacity: 1; }
+
+  .score-reveal {
+    opacity: 0;
+    transition: opacity 0.4s ease 0.8s;
   }
 
-  .feature h3 {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
+  .score-reveal.visible { opacity: 1; }
 
-  .feature p {
-    font-size: 13px;
-    color: var(--dim);
-    line-height: 1.6;
-  }
+  /* Stagger each metric row */
+  .metric-row:nth-child(1) .bar-fill { transition-delay: 0.1s; }
+  .metric-row:nth-child(2) .bar-fill { transition-delay: 0.2s; }
+  .metric-row:nth-child(3) .bar-fill { transition-delay: 0.3s; }
+  .metric-row:nth-child(4) .bar-fill { transition-delay: 0.4s; }
+  .metric-row:nth-child(5) .bar-fill { transition-delay: 0.5s; }
+  .metric-row:nth-child(6) .bar-fill { transition-delay: 0.6s; }
+  .metric-row:nth-child(7) .bar-fill { transition-delay: 0.7s; }
+  .metric-row:nth-child(8) .bar-fill { transition-delay: 0.8s; }
+  .metric-row:nth-child(9) .bar-fill { transition-delay: 0.9s; }
 
-  .feature code {
-    font-size: 12px;
-    color: var(--green);
-    background: var(--bg);
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
-
-  /* Patterns + metrics */
-  .grid-3 {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 8px;
-  }
-
-  .chip {
-    font-size: 13px;
-    padding: 8px 12px;
-    background: var(--surface);
-    border-radius: 6px;
-    border-left: 3px solid var(--border);
-  }
-
-  .chip.warn { border-left-color: var(--amber); }
-  .chip.concern { border-left-color: var(--red); }
-  .chip.good { border-left-color: var(--green); }
-
-  /* Formats */
-  .formats {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .format {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px 16px;
-    font-size: 13px;
-  }
-
-  .format .label { color: var(--text); font-weight: 600; }
-  .format .status { color: var(--green); font-size: 12px; }
+  .metric-row:nth-child(1) .bar-empty { transition-delay: 0.6s; }
+  .metric-row:nth-child(2) .bar-empty { transition-delay: 0.7s; }
+  .metric-row:nth-child(3) .bar-empty { transition-delay: 0.8s; }
+  .metric-row:nth-child(4) .bar-empty { transition-delay: 0.9s; }
+  .metric-row:nth-child(5) .bar-empty { transition-delay: 1.0s; }
+  .metric-row:nth-child(6) .bar-empty { transition-delay: 1.1s; }
+  .metric-row:nth-child(7) .bar-empty { transition-delay: 1.2s; }
+  .metric-row:nth-child(8) .bar-empty { transition-delay: 1.3s; }
+  .metric-row:nth-child(9) .bar-empty { transition-delay: 1.4s; }
 
   /* Footer */
   footer {
     padding: 48px 0;
     border-top: 1px solid var(--border);
-    text-align: center;
-    font-size: 13px;
+    font-size: 12px;
     color: var(--dim);
   }
 
-  footer a { color: var(--accent); text-decoration: none; }
+  footer a { color: var(--muted); text-decoration: none; }
   footer a:hover { text-decoration: underline; }
+
+  .footer-links {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 16px;
+  }
 
   /* Responsive */
   @media (max-width: 600px) {
-    .hero { padding: 48px 0 40px; }
-    .hero h1 { font-size: 32px; }
-    .features, .grid-3 { grid-template-columns: 1fr; }
-    .demo { font-size: 12px; padding: 16px; }
+    .hero { padding: 48px 0 32px; }
+    .logo { font-size: 16px; }
+    .pitch { font-size: 15px; }
+    .terminal { font-size: 11px; padding: 16px; }
   }
 </style>
 </head>
@@ -237,157 +199,71 @@
 
 <div class="container">
   <div class="hero">
-    <h1><span>sesh</span></h1>
-    <p class="tagline">Two commands. Zero setup. Your agents get better every session.</p>
+    <div class="logo">┏━┓┏━╸┏━┓╻ ╻
+┗━┓┣╸ ┗━┓┣━┫
+┗━┛┗━╸┗━┛╹ ╹</div>
+    <p class="pitch">Find out why your AI coding sessions fail — and make your repo ready for the ones that don't.</p>
     <div class="install-box" onclick="copyInstall()">
       <span class="copied" id="copied">copied</span>
-      <span class="prompt">$</span> <span class="cmd">pip install agentsesh</span>
+      <span class="prompt">$</span> pip install agentsesh
     </div>
-    <p class="version">v0.10.0 &middot; Python 3.10+ &middot; zero dependencies &middot; <a href="https://github.com/ateeples/agentsesh">GitHub</a></p>
+    <p class="meta">v0.10.0 &middot; Python 3.10+ &middot; zero dependencies &middot; <a href="https://github.com/ateeples/agentsesh">GitHub</a> &middot; <a href="https://pypi.org/project/agentsesh/">PyPI</a></p>
   </div>
 
-  <section>
-    <h2>Diagnose any session</h2>
-    <p class="subtitle">Auto-finds your most recent Claude Code session. No database, no config.</p>
-    <div class="demo"><span class="prompt">$</span> sesh analyze
+  <div class="demos">
+    <div class="demo-pair">
 
-<span class="b">Session Analysis</span>
-<span class="b">Grade:</span>   <span class="g">B (82/100)</span>
-<span class="b">Model:</span>   claude-opus-4-6
-<span class="b">Stats:</span>   125 tool calls &middot; 4 errors &middot; 12/14 tests passed
+      <div class="demo-block">
+        <h2>$ sesh audit</h2>
+        <div class="terminal" id="audit-demo"><span class="d">Repo Audit
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
 
-<span class="b">Patterns:</span>
-  <span class="a">[!] bash_overuse</span>    7/44 Bash calls used cat/grep — use dedicated tools
-  <span class="a">[!] write_then_read</span> Write-before-read phase at calls 26-35
+Metrics
+<span class="d">────────────────────────</span>
+<span class="metric-row">  bootstrap           [10/10] <span class="bar-fill">██████████</span><span class="bar-empty"></span></span>
+<span class="metric-row">  task_entry_points   [ 6/10] <span class="bar-fill">██████</span><span class="bar-empty">░░░░</span></span>
+<span class="metric-row">  validation_harness  [10/10] <span class="bar-fill">██████████</span><span class="bar-empty"></span></span>
+<span class="metric-row">  linting             [ 8/10] <span class="bar-fill">████████</span><span class="bar-empty">░░</span></span>
+<span class="metric-row">  codebase_map        [10/10] <span class="bar-fill">██████████</span><span class="bar-empty"></span></span>
+<span class="metric-row">  doc_structure       [10/10] <span class="bar-fill">██████████</span><span class="bar-empty"></span></span>
+<span class="metric-row">  decision_records    [10/10] <span class="bar-fill">██████████</span><span class="bar-empty"></span></span>
+<span class="metric-row">  agent_instructions  [ 8/10] <span class="bar-fill">████████</span><span class="bar-empty">░░</span></span>
+<span class="metric-row">  file_discipline     [ 8/10] <span class="bar-fill">████████</span><span class="bar-empty">░░</span></span>
 
-<span class="b">Failure Points:</span>
-  <span class="r">[blind_edit]</span> at 2m — edited auth.py without reading it first
+<span class="score-reveal"><strong>Score: 89/100  Grade: B</strong></span></div>
+      </div>
 
-<span class="b">Remediations:</span>
-  - Use Read/Grep/Glob instead of Bash for file operations
-  - Research before implementation</div>
-  </section>
+      <div class="demo-block">
+        <h2>$ sesh analyze</h2>
+        <div class="terminal">Session Analysis
+<span class="d">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
 
-  <section>
-    <h2>Grade any repo</h2>
-    <p class="subtitle">9 metrics that measure agent-readiness. Works on any codebase.</p>
-    <div class="demo"><span class="prompt">$</span> sesh audit
+Duration: 13 min | 39 tool calls | ~$0.81
+Files touched: 12 | Tests: 1 run (1 pass, 0 fail)
+Grade: A (92/100)
 
-<span class="b">Repo Audit</span>
-<span class="b">Score:</span> <span class="g">89/100  Grade: B</span>
+<strong>What Happened</strong>
+<span class="d">─────────────</span>
+39 tool calls, 2 errors (5% error rate).
+3 process issue(s) detected.
+Tests: 1/1 passed.
 
-  bootstrap           <span class="g">[10/10] ██████████</span>
-  task_entry_points   <span class="a">[ 6/10] ██████░░░░</span>
-  validation_harness  <span class="g">[10/10] ██████████</span>
-  linting             <span class="g">[ 8/10] ████████░░</span>
-  codebase_map        <span class="g">[10/10] ██████████</span>
-  doc_structure       <span class="g">[10/10] ██████████</span>
-  decision_records    <span class="g">[10/10] ██████████</span>
-  agent_instructions  <span class="g">[ 8/10] ████████░░</span>
-  file_discipline     <span class="g">[ 8/10] ████████░░</span></div>
-  </section>
+<strong>What To Fix</strong>
+<span class="d">───────────</span>
+<span class="m">[ !!]</span> Reduce error rate (recommended)
+<span class="m">[ !!]</span> Use dedicated tools instead of Bash (recommended)
+<span class="m">[  -]</span> Parallelize independent operations (optional)</div>
+      </div>
 
-  <section>
-    <h2>Close the loop</h2>
-    <p class="subtitle">Findings land in your agent's context. Next session, behavior changes.</p>
-    <div class="demo"><span class="prompt">$</span> sesh analyze --feedback
-<span class="g">Feedback written to CLAUDE.md (B, 82/100)</span>
-
-<span class="d"># What gets written:</span>
-<span class="b">## Last Session: B (82/100) — 2026-03-14</span>
-
-125 tool calls. 4 errors. 12/14 tests passed.
-
-<span class="b">This session, focus on:</span>
-- Use Read/Grep/Glob instead of Bash (7 instances last session)
-- Read and explore before writing — understand first, then implement</div>
-    <p class="demo-label">Replaces previous feedback on each run. Agents see it on boot.</p>
-  </section>
-
-  <section>
-    <h2>CI gate</h2>
-    <p class="subtitle">One line in your pipeline. Fail the build if repo readiness drops.</p>
-    <div class="demo"><span class="d"># In your CI config:</span>
-<span class="prompt">$</span> sesh audit --threshold 80 --json
-
-<span class="d"># Exit code 0 if score >= 80, exit code 1 if below.</span>
-<span class="d"># JSON output for programmatic consumption.</span></div>
-  </section>
-
-  <section>
-    <h2>What it detects</h2>
-    <div class="grid-3" style="margin-bottom: 32px;">
-      <div class="chip warn">bash overuse</div>
-      <div class="chip concern">blind edits</div>
-      <div class="chip warn">error streaks</div>
-      <div class="chip warn">write-then-read</div>
-      <div class="chip warn">missed parallelism</div>
-      <div class="chip warn">repeated searches</div>
-      <div class="chip warn">scattered files</div>
-      <div class="chip warn">low read ratio</div>
     </div>
-
-    <h2>What it audits</h2>
-    <div class="grid-3">
-      <div class="chip good">bootstrap setup</div>
-      <div class="chip good">task entry points</div>
-      <div class="chip good">validation harness</div>
-      <div class="chip good">linting config</div>
-      <div class="chip good">codebase map</div>
-      <div class="chip good">doc structure</div>
-      <div class="chip good">decision records</div>
-      <div class="chip good">agent instructions</div>
-      <div class="chip good">file discipline</div>
-    </div>
-  </section>
-
-  <section>
-    <h2>How it works</h2>
-    <div class="features">
-      <div class="feature">
-        <h3>Auto-discovery</h3>
-        <p><code>sesh analyze</code> finds your most recent session automatically. No file paths needed.</p>
-      </div>
-      <div class="feature">
-        <h3>Closed-loop feedback</h3>
-        <p><code>--feedback</code> writes findings to CLAUDE.md. Each run replaces the last. Agents improve.</p>
-      </div>
-      <div class="feature">
-        <h3>Zero dependencies</h3>
-        <p>Pure Python stdlib. No external packages. Installs in seconds.</p>
-      </div>
-      <div class="feature">
-        <h3>Machine-readable</h3>
-        <p><code>--json</code> on every command. Exit codes for CI. Built for automation.</p>
-      </div>
-      <div class="feature">
-        <h3>Session replay</h3>
-        <p>Step-by-step playback with pattern annotations. See exactly what happened.</p>
-      </div>
-      <div class="feature">
-        <h3>Prompt debugging</h3>
-        <p>Search agent thinking blocks. Find the decision point behind any action.</p>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <h2>Supported formats</h2>
-    <div class="formats">
-      <div class="format">
-        <span class="label">Claude Code</span> <span class="status">.jsonl</span>
-      </div>
-      <div class="format">
-        <span class="label">OpenAI Codex CLI</span> <span class="status">.jsonl</span>
-      </div>
-    </div>
-  </section>
+  </div>
 
   <footer>
-    Built by <a href="https://github.com/ateeples">Andy Teeples</a> &amp; Opus &middot;
-    <a href="https://github.com/ateeples/agentsesh">Source</a> &middot;
-    <a href="https://pypi.org/project/agentsesh/">PyPI</a> &middot;
-    <a href="https://github.com/ateeples/agentsesh/blob/main/CHANGELOG.md">Changelog</a>
+    <div class="footer-links">
+      <a href="https://github.com/ateeples/agentsesh">All commands &rarr; GitHub</a>
+      <a href="https://github.com/ateeples/agentsesh/blob/main/CHANGELOG.md">Changelog</a>
+    </div>
+    Built by <a href="https://github.com/ateeples">Andy Teeples</a> &amp; Opus
   </footer>
 </div>
 
@@ -398,6 +274,21 @@ function copyInstall() {
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 1500);
 }
+
+// Animate audit bars on scroll into view
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.querySelectorAll('.bar-fill, .bar-empty, .score-reveal').forEach(el => {
+        el.classList.add('visible');
+      });
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.3 });
+
+const auditDemo = document.getElementById('audit-demo');
+if (auditDemo) observer.observe(auditDemo);
 </script>
 
 </body>
