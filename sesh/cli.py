@@ -217,6 +217,56 @@ def cmd_export(args) -> None:
     db.close()
 
 
+# --- CLI banner ---
+
+
+def _print_banner() -> None:
+    """Print styled CLI banner when no subcommand is given."""
+    color = sys.stdout.isatty()
+
+    # ANSI codes
+    BOLD = "\033[1m" if color else ""
+    DIM = "\033[2m" if color else ""
+    CYAN = "\033[36m" if color else ""
+    GREEN = "\033[32m" if color else ""
+    WHITE = "\033[97m" if color else ""
+    R = "\033[0m" if color else ""
+
+    def cmd(name: str, desc: str, pad: int = 22) -> str:
+        return f"    {GREEN}{name:<{pad}}{R}{DIM}{desc}{R}"
+
+    lines = [
+        "",
+        f"  {BOLD}{WHITE}sesh{R} {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━{R} {DIM}v{__version__}{R}",
+        "",
+        f"  {BOLD}{CYAN}Start here{R} {DIM}— no setup required:{R}",
+        cmd("analyze", "diagnose your last AI coding session"),
+        cmd("audit", "grade your repo's agent-readiness"),
+        "",
+        f"  {BOLD}{CYAN}Track{R} {DIM}— session database:{R}",
+        cmd("init", "set up .sesh/ in current directory"),
+        cmd("watch --once", "auto-discover and ingest sessions"),
+        cmd("reflect", "analyze most recent session"),
+        cmd("report", "cross-session trends"),
+        cmd("replay", "step-by-step session playback"),
+        "",
+        f"  {BOLD}{CYAN}Fix{R} {DIM}— close the loop:{R}",
+        cmd("analyze --feedback", "write findings to CLAUDE.md"),
+        cmd("fix --patch", "generate remediation patch"),
+        cmd("audit --threshold N", "CI gate for repo readiness"),
+        "",
+        f"  {BOLD}{CYAN}Explore{R}",
+        cmd("search <query>", "full-text search across sessions"),
+        cmd("debug <query>", "search agent thinking blocks"),
+        cmd("test", "compare outcomes between sessions"),
+        cmd("sesh-web", "browser dashboard"),
+        "",
+        f"  {DIM}sesh <command> --help for details{R}",
+        "",
+    ]
+    print("\n".join(lines))
+
+
 # --- CLI entry point and argument parsing ---
 
 
@@ -335,7 +385,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if not args.command:
-        parser.print_help()
+        _print_banner()
         sys.exit(0)
 
     # Command dispatch table — maps subcommand name to handler function
