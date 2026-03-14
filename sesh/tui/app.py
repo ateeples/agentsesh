@@ -37,7 +37,13 @@ class TuiApp:
 
     def load_data(self) -> None:
         """Load/refresh all data from the database."""
-        self.sessions = self.db.list_sessions(limit=500)
+        raw_sessions = self.db.list_sessions(limit=500)
+        # Sort by start_time descending (DB sorts by ingestion time)
+        self.sessions = sorted(
+            raw_sessions,
+            key=lambda s: s.get("start_time") or "0",
+            reverse=True,
+        )
         self.stats = self.db.get_stats()
 
         # Load all patterns for frequency analysis
@@ -108,7 +114,8 @@ class TuiApp:
     def _render_wide(self, stdscr, start_y: int, max_y: int, max_x: int) -> None:
         """Render side-by-side layout for wide terminals (100+ cols)."""
         remaining = max_y - start_y
-        left_w = max_x // 2
+        # Give left column 45%, right 55% (patterns need bar room)
+        left_w = int(max_x * 0.45)
         right_w = max_x - left_w
 
         # Left column: Trend (top), Sessions (bottom)

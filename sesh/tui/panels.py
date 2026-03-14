@@ -103,8 +103,12 @@ def draw_trend(win, y: int, x: int, width: int, height: int, sessions: list[dict
         safe_addstr(win, y + 2, x + 3, "No data", dim_attr())
         return
 
-    # Get scores in chronological order (sessions come newest-first)
-    scores = [s.get("score", 0) or 0 for s in reversed(sessions)]
+    # Get scores in chronological order, filtering out zero/null (ungraded sessions)
+    scores = [
+        s.get("score", 0) or 0
+        for s in reversed(sessions)
+        if (s.get("score") or 0) > 0
+    ]
 
     # Available width for sparkline
     spark_width = width - 6
@@ -130,6 +134,19 @@ def draw_trend(win, y: int, x: int, width: int, height: int, sessions: list[dict
         safe_addstr(win, mid_y + 1, line_start, line, dim_attr())
 
 
+_PATTERN_SHORT = {
+    "error_rate": "err rate",
+    "error_streak": "err streak",
+    "bash_overuse": "bash",
+    "write_without_read": "blind edit",
+    "write_then_read": "write→read",
+    "low_read_ratio": "low reads",
+    "repeated_search": "repeat srch",
+    "scattered_files": "scattered",
+    "missed_parallelism": "no parallel",
+}
+
+
 def draw_patterns(win, y: int, x: int, width: int, height: int, all_patterns: list[dict]) -> None:
     """Draw the top patterns panel.
 
@@ -148,28 +165,29 @@ def draw_patterns(win, y: int, x: int, width: int, height: int, all_patterns: li
 
     # Available rows for patterns
     available_rows = height - 2
-    inner_width = width - 4
+    inner_width = width - 6  # margins inside box
+
+    # Dynamic name width: use abbreviated names
+    name_col = 12
+    count_col = 4  # " NNN"
+    bar_width = inner_width - name_col - count_col - 1
+    if bar_width < 3:
+        bar_width = 3
+
+    max_count = counter.most_common(1)[0][1] if counter else 1
 
     for i, (ptype, count) in enumerate(counter.most_common(available_rows)):
         if i >= available_rows:
             break
         row_y = y + 1 + i
 
-        # Format: name  bar  count
-        name = truncate(ptype, 18)
+        name = _PATTERN_SHORT.get(ptype, truncate(ptype, name_col))
+        bar = horizontal_bar(count, max_count, bar_width)
         count_str = f"{count:>3d}"
 
-        # Bar width: fill remaining space
-        bar_width = inner_width - len(name) - len(count_str) - 4
-        if bar_width < 2:
-            bar_width = 2
-
-        max_count = counter.most_common(1)[0][1] if counter else 1
-        bar = horizontal_bar(count, max_count, bar_width)
-
-        safe_addstr(win, row_y, x + 2, f"{name:<18s}", dim_attr())
-        safe_addstr(win, row_y, x + 2 + 18 + 1, bar, curses.color_pair(3))
-        safe_addstr(win, row_y, x + 2 + 18 + 1 + bar_width + 1, count_str, dim_attr())
+        safe_addstr(win, row_y, x + 3, f"{name:<{name_col}s}", dim_attr())
+        safe_addstr(win, row_y, x + 3 + name_col, bar, curses.color_pair(3))
+        safe_addstr(win, row_y, x + 3 + name_col + bar_width + 1, count_str, dim_attr())
 
 
 def draw_sessions(
@@ -204,13 +222,20 @@ def draw_sessions(
         # Build row: marker date grade score duration errors
         marker = "\u25b8" if is_selected else " "
         date = format_date(s.get("start_time") or s.get("ingested_at"))
-        grade = s.get("grade", "?") or "?"
-        score = s.get("score", 0) or 0
+        grade = s.get("grade") or "?"
+        score = s.get("score") or 0
         duration = format_duration(s.get("duration_minutes"))
         errors = s.get("error_count", 0) or 0
 
+        # Handle ungraded sessions cleanly
+        if grade in ("N/A", "?", "") or score == 0:
+            grade = "\u2014"  # em dash
+            score_str = "  \u2014"
+        else:
+            score_str = f"{score:>3d}"
+
         # Compose the row
-        row_parts = f" {marker} {date}  {grade:<2s} {score:>3d}  {duration} {errors:>3d}err"
+        row_parts = f" {marker} {date}  {grade:<2s} {score_str}  {duration} {errors:>3d}err"
         row_text = truncate(row_parts, width - 2)
 
         attr = curses.A_REVERSE if is_selected else 0
