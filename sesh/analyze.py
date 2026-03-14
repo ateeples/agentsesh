@@ -13,24 +13,23 @@ Pipeline:
                    AnalysisResult → format
 """
 
+import contextlib
 import json
-import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from .parsers import parse_transcript
-from .parsers.base import Pattern, SessionGrade, ToolCall, classify_tool
-from .analyzers.patterns import detect_all_patterns
 from .analyzers.grader import grade_session
+from .analyzers.outcomes import BUILD_PATTERNS, TEST_PATTERNS
+from .analyzers.patterns import detect_all_patterns
 from .analyzers.remediation import (
     Remediation,
     get_all_remediations,
 )
-from .analyzers.outcomes import TEST_PATTERNS, BUILD_PATTERNS, LINT_PATTERNS
-from .replay import build_timeline_from_source, ReplayStep
-from .debug import extract_decision_points, DecisionPoint
-
+from .debug import DecisionPoint, extract_decision_points
+from .parsers import parse_transcript
+from .parsers.base import Pattern, SessionGrade, ToolCall
+from .replay import ReplayStep, build_timeline_from_source
 
 # Approximate model pricing (USD per million tokens) — input, output
 _MODEL_PRICING = {
@@ -499,10 +498,7 @@ def format_analysis(
         lines.append("Failure Points")
         lines.append("\u2500" * 14)
         for i, fp in enumerate(result.failure_points, 1):
-            if fp.minute is not None:
-                loc = f"min {fp.minute:.0f}"
-            else:
-                loc = f"step {fp.seq}"
+            loc = f"min {fp.minute:.0f}" if fp.minute is not None else f"step {fp.seq}"
             lines.append(f"{i}. [{loc}] {_failure_label(fp.category)}")
             lines.append(f"   {fp.description}")
             if fp.thinking_context and verbose:
@@ -621,7 +617,7 @@ def _estimate_impact(pattern: Pattern, total_steps: int) -> str:
     affected = len(pattern.tool_indices) if pattern.tool_indices else 0
 
     if pattern.type == "write_without_read":
-        return f"Caused errors from editing unread files."
+        return "Caused errors from editing unread files."
     elif pattern.type == "error_streak":
         return f"{affected} tool calls wasted in error loop."
     elif pattern.type == "repeated_search":
@@ -643,10 +639,8 @@ def _enrich_failure_points(
     """Add minute offsets and thinking context to failure points in-place."""
     start_dt = None
     if start_time:
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            pass
 
     # Build tool_index → ToolCall mapping
     for fp in failure_points:

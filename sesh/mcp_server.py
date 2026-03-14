@@ -11,18 +11,17 @@ Usage:
     sesh-mcp
 """
 
-import json
 import os
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
+from .analyzers.trends import analyze_trends
 from .config import Config, find_config, find_sesh_dir
 from .db import Database
-from .parsers import parse_transcript
-from .analyzers.trends import analyze_trends
 from .formatters.handoff import format_handoff
 from .formatters.report import format_session_report, format_trend_report
+from .parsers import parse_transcript
 from .watch import discover_session_dirs, ingest_new_files
 
 # Initialize FastMCP server with instructions that guide agents
@@ -312,10 +311,7 @@ def sesh_sync(directories: list[str] | None = None, settle_seconds: float = 60.0
     config = _get_config()
     db = _get_db()
     try:
-        if directories:
-            dirs = [Path(d) for d in directories]
-        else:
-            dirs = discover_session_dirs()
+        dirs = [Path(d) for d in directories] if directories else discover_session_dirs()
 
         if not dirs:
             return "No session directories found. Specify directories or ensure ~/.claude/projects/ exists."

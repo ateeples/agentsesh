@@ -6,10 +6,8 @@ blind edits, error streaks, bash anti-patterns), bonus mechanics
 custom weights).
 """
 
-import pytest
+from sesh.analyzers.grader import GRADE_SCALE, grade_session
 from sesh.parsers.base import ToolCall
-from sesh.analyzers.grader import grade_session, GRADE_SCALE
-
 
 # --- Test helper ---
 
@@ -99,7 +97,6 @@ class TestGrading:
 
     def test_parallelism_bonus(self):
         """Multiple parallel batches should get a bonus."""
-        ts = "2026-03-12T10:00:00Z"
         calls = []
         for batch in range(4):
             batch_ts = f"2026-03-12T10:0{batch}:00Z"

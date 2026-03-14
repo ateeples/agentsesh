@@ -7,6 +7,7 @@ No execution, no LLM calls, filesystem-only.
 Detectors self-register at module load via register_metric().
 """
 
+import contextlib
 import json as json_mod
 import re
 from pathlib import Path
@@ -182,7 +183,7 @@ def detect_task_entry_points(repo_path: Path, config: dict) -> MetricResult:
     if makefile.exists():
         try:
             lines = makefile.read_text(errors="replace").splitlines()
-            targets = [l for l in lines if re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*\s*:', l)]
+            targets = [line for line in lines if re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*\s*:', line)]
             if len(targets) >= 2:
                 score += 3
                 findings.append(Finding("found", f"Makefile: {len(targets)} targets"))
@@ -336,10 +337,8 @@ def detect_linting(repo_path: Path, config: dict) -> MetricResult:
     pyproject = repo_path / "pyproject.toml"
     pyproject_text = ""
     if pyproject.exists():
-        try:
+        with contextlib.suppress(OSError):
             pyproject_text = pyproject.read_text(errors="replace")
-        except OSError:
-            pass
 
     # --- JS/TS tools ---
 
@@ -480,9 +479,8 @@ def detect_codebase_map(repo_path: Path, config: dict) -> MetricResult:
     dir_readme_count = 0
     try:
         for child in repo_path.iterdir():
-            if child.is_dir() and child.name not in _SKIP_DIRS and not child.name.startswith("."):
-                if (child / "README.md").exists():
-                    dir_readme_count += 1
+            if child.is_dir() and child.name not in _SKIP_DIRS and not child.name.startswith(".") and (child / "README.md").exists():
+                dir_readme_count += 1
     except OSError:
         pass
 

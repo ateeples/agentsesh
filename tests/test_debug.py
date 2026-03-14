@@ -8,33 +8,32 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from sesh.replay import ReplayStep, build_timeline_from_source
 from sesh.debug import (
-    DecisionPoint, extract_decision_points, search_thinking, lookup_by_action,
-    extract_dotnotes, index_dotnotes, search_dotnotes, correlate_patterns,
+    correlate_patterns,
+    extract_decision_points,
+    extract_dotnotes,
+    index_dotnotes,
+    lookup_by_action,
+    search_dotnotes,
+    search_thinking,
 )
 from sesh.parsers.base import Pattern
-
+from sesh.replay import ReplayStep, build_timeline_from_source
 
 # --- Fixtures ---
 
 def _jsonl_line(msg_type, content, timestamp="2026-03-13T14:00:00Z"):
     d = {"type": msg_type, "timestamp": timestamp}
-    if msg_type == "assistant":
-        d["message"] = {"content": content}
-    elif msg_type == "user":
+    if msg_type == "assistant" or msg_type == "user":
         d["message"] = {"content": content}
     return json.dumps(d)
 
 
 def _write_jsonl(lines):
-    f = tempfile.NamedTemporaryFile(suffix=".jsonl", mode="w", delete=False)
-    for line in lines:
-        f.write(line + "\n")
-    f.close()
-    return f.name
+    with tempfile.NamedTemporaryFile(suffix=".jsonl", mode="w", delete=False) as f:
+        for line in lines:
+            f.write(line + "\n")
+        return f.name
 
 
 def _make_steps(*specs):

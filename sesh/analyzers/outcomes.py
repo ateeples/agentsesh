@@ -10,9 +10,8 @@ outcome metrics tell you if you won.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
 from collections import Counter
-
+from dataclasses import dataclass, field
 
 # Patterns that indicate test execution
 TEST_PATTERNS = re.compile(
@@ -97,6 +96,7 @@ def extract_outcomes(tool_calls: list[dict]) -> OutcomeMetrics:
     Returns:
         OutcomeMetrics with all outcome signals extracted.
     """
+    import contextlib
     import json
 
     metrics = OutcomeMetrics()
@@ -110,10 +110,8 @@ def extract_outcomes(tool_calls: list[dict]) -> OutcomeMetrics:
     for tc in tool_calls:
         input_data = {}
         if tc.get("input_json"):
-            try:
+            with contextlib.suppress(json.JSONDecodeError, TypeError):
                 input_data = json.loads(tc["input_json"])
-            except (json.JSONDecodeError, TypeError):
-                pass
         parsed_calls.append({
             "name": tc.get("name", ""),
             "input_data": input_data,
@@ -131,7 +129,6 @@ def extract_outcomes(tool_calls: list[dict]) -> OutcomeMetrics:
     )
 
     # --- Terminal state ---
-    tail = parsed_calls[-3:] if len(parsed_calls) >= 3 else parsed_calls
     metrics.final_error_streak = 0
     for tc in reversed(parsed_calls):
         if tc["is_error"]:
@@ -254,11 +251,9 @@ def compare_outcomes(
         _compare_higher(comp, "test_pass_rate", b_rate, c_rate,
                         "test pass rate", fmt=".0%")
     elif candidate.test_runs > 0 and baseline.test_runs == 0:
-        comp.improvements.append("test runs: started running tests (0 → {})".format(
-            candidate.test_runs))
+        comp.improvements.append(f"test runs: started running tests (0 → {candidate.test_runs})")
     elif baseline.test_runs > 0 and candidate.test_runs == 0:
-        comp.regressions.append("test runs: stopped running tests ({} → 0)".format(
-            baseline.test_runs))
+        comp.regressions.append(f"test runs: stopped running tests ({baseline.test_runs} → 0)")
 
     # Build pass rate (if both built)
     if baseline.build_runs > 0 and candidate.build_runs > 0:

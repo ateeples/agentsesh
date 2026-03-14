@@ -13,18 +13,17 @@ from sesh.analyze import (
     AnalysisResult,
     FailurePoint,
     SessionStats,
+    analysis_to_json,
     analyze_session,
     calculate_effective_time,
     estimate_cost,
     extract_stats,
     extract_token_usage,
     format_analysis,
-    analysis_to_json,
     generate_summary,
     identify_failure_points,
 )
 from sesh.parsers.base import Pattern, SessionGrade, ToolCall
-
 
 # --- Fixtures ---
 
@@ -406,9 +405,8 @@ class TestGenerateSummary:
                          description="3 consecutive errors on Bash"),
         ]
         lines = generate_summary(stats, grade, [], fps)
-        text = "\n".join(lines)
         assert len(lines) > 0
-        assert any("error" in l.lower() for l in lines)
+        assert any("error" in line.lower() for line in lines)
 
 
 # ============================================================

@@ -174,9 +174,8 @@ class Database:
         for tc in session.tool_calls:
             if tc.name == "Read":
                 files_read.add(tc.input_data.get("file_path", ""))
-            elif tc.name == "Edit":
-                if tc.input_data.get("file_path", "") not in files_read:
-                    blind_edits += 1
+            elif tc.name == "Edit" and tc.input_data.get("file_path", "") not in files_read:
+                blind_edits += 1
 
         # Bash anti-patterns: using Bash for tasks with dedicated tools
         # (e.g., cat/grep when Read/Grep tools exist)

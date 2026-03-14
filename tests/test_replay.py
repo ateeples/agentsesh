@@ -11,18 +11,17 @@ from pathlib import Path
 
 import pytest
 
+from sesh.parsers.base import Pattern
 from sesh.replay import (
     ReplayStep,
-    build_timeline_from_source,
-    build_timeline_from_db,
-    build_timeline,
     annotate_timeline,
+    build_timeline,
+    build_timeline_from_db,
+    build_timeline_from_source,
     filter_steps,
     format_replay,
     parse_range,
 )
-from sesh.parsers.base import Pattern
-
 
 # --- Test helper ---
 
@@ -57,11 +56,10 @@ def _jsonl_line(msg_type, content, timestamp="2026-03-13T14:00:00Z", model=None)
 
 def _write_jsonl(lines):
     """Write JSONL lines to a temp file and return the path."""
-    f = tempfile.NamedTemporaryFile(suffix=".jsonl", mode="w", delete=False)
-    for line in lines:
-        f.write(line + "\n")
-    f.close()
-    return f.name
+    with tempfile.NamedTemporaryFile(suffix=".jsonl", mode="w", delete=False) as f:
+        for line in lines:
+            f.write(line + "\n")
+        return f.name
 
 
 # --- DB-only timeline tests ---

@@ -5,9 +5,8 @@ Start at 100, deduct for issues, add bonuses.
 """
 
 from collections import Counter
-from pathlib import Path
 
-from ..parsers.base import SessionGrade, ToolCall, classify_tool
+from ..parsers.base import SessionGrade, ToolCall
 
 # Default grading weights — overridable via config
 DEFAULT_WEIGHTS = {
@@ -74,9 +73,8 @@ def grade_session(
     for tc in tool_calls:
         if tc.name == "Read":
             files_read.add(tc.input_data.get("file_path", ""))
-        elif tc.name == "Edit":
-            if tc.input_data.get("file_path", "") not in files_read:
-                blind_edits += 1
+        elif tc.name == "Edit" and tc.input_data.get("file_path", "") not in files_read:
+            blind_edits += 1
     if blind_edits:
         d = min(w["blind_edit_max"], blind_edits * w["blind_edit_deduction"])
         score -= d

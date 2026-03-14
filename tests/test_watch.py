@@ -2,20 +2,17 @@
 
 import json
 import os
-import tempfile
 import time
 from pathlib import Path
 
-import pytest
-
-from sesh.watch import (
-    find_transcript_files,
-    find_latest_transcript,
-    ingest_new_files,
-    discover_session_dirs,
-)
 from sesh.config import Config
 from sesh.db import Database
+from sesh.watch import (
+    discover_session_dirs,
+    find_latest_transcript,
+    find_transcript_files,
+    ingest_new_files,
+)
 
 
 def _write_jsonl(path: Path, lines: list[dict]) -> None:
@@ -89,7 +86,7 @@ class TestFindTranscriptFiles:
         assert len(files) == 0
 
     def test_zero_settle_includes_new_files(self, tmp_path):
-        session = _make_session_file(tmp_path)
+        _make_session_file(tmp_path)
 
         files = find_transcript_files([tmp_path], settle_seconds=0)
         assert len(files) == 1

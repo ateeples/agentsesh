@@ -1,13 +1,10 @@
 """Tests for the feedback module — closed-loop agent context injection."""
 
-from pathlib import Path
 
-import pytest
 
-from sesh.feedback import generate_feedback, write_feedback, MARKER_START, MARKER_END
-from sesh.analyze import AnalysisResult, SessionStats, FailurePoint
-from sesh.parsers.base import SessionGrade, Pattern
-from sesh.analyzers.remediation import Remediation
+from sesh.analyze import AnalysisResult, FailurePoint, SessionStats
+from sesh.feedback import MARKER_END, MARKER_START, generate_feedback, write_feedback
+from sesh.parsers.base import Pattern, SessionGrade
 
 
 def _make_result(**overrides) -> AnalysisResult:
@@ -79,7 +76,7 @@ class TestGenerateFeedback:
         result = _make_result(patterns=patterns, failure_points=[])
         content = generate_feedback(result)
         # Count bullet points (no failure points in this result)
-        focus_lines = [l for l in content.split("\n") if l.startswith("- ")]
+        focus_lines = [line for line in content.split("\n") if line.startswith("- ")]
         assert len(focus_lines) <= 4
 
     def test_info_patterns_excluded_from_directives(self):
