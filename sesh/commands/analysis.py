@@ -178,11 +178,31 @@ def _outcome_to_dict(m) -> dict:
 
 
 def cmd_analyze(args) -> None:
-    """One-command session analysis — no database required."""
-    path = Path(args.file)
-    if not path.exists():
-        print(f"Error: File not found: {args.file}", file=sys.stderr)
-        sys.exit(1)
+    """One-command session analysis — no database required.
+
+    With no file argument, auto-discovers the most recent Claude Code
+    session from ~/.claude/projects/. Zero friction.
+    """
+    from ..watch import find_latest_transcript
+
+    if args.file:
+        path = Path(args.file)
+        if not path.exists():
+            print(f"Error: File not found: {args.file}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        # Auto-discover most recent transcript
+        path = find_latest_transcript()
+        if not path:
+            print(
+                "No session transcripts found.\n"
+                "  Provide a file:  sesh analyze path/to/session.jsonl\n"
+                "  Or ensure Claude Code sessions exist in ~/.claude/projects/",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if not args.json:
+            print(f"Auto-detected: {path}\n", file=sys.stderr)
 
     try:
         result = analyze_session(path)
@@ -203,7 +223,12 @@ def cmd_analyze(args) -> None:
 
 
 def cmd_audit(args) -> None:
-    """Grade a repo's agent-readiness — no database required."""
+    """Grade a repo's agent-readiness — no database required.
+
+    Exit code reflects score vs threshold: 0 if score >= threshold,
+    1 if below. Default threshold is 0 (always pass). Use --threshold
+    for CI gates.
+    """
     path = Path(args.path) if args.path else Path.cwd()
     if not path.exists() or not path.is_dir():
         print(f"Error: Not a directory: {path}", file=sys.stderr)
@@ -216,3 +241,10 @@ def cmd_audit(args) -> None:
         print(audit_to_json(result))
     else:
         print(format_audit_report(result))
+
+    # CI gate: non-zero exit if score below threshold
+    threshold = getattr(args, "threshold", None)
+    if threshold is not None and result.score < threshold:
+        if not args.json:
+            print(f"\nFailed: score {result.score} < threshold {threshold}", file=sys.stderr)
+        sys.exit(1)

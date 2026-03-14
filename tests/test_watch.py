@@ -10,6 +10,7 @@ import pytest
 
 from sesh.watch import (
     find_transcript_files,
+    find_latest_transcript,
     ingest_new_files,
     discover_session_dirs,
 )
@@ -129,6 +130,46 @@ class TestFindTranscriptFiles:
 
         files = find_transcript_files([dir1, dir2], settle_seconds=60)
         assert len(files) == 2
+
+
+# --- find_latest_transcript ---
+
+
+class TestFindLatestTranscript:
+    def test_returns_newest_file(self, tmp_path, monkeypatch):
+        """Should return the most recently modified JSONL file."""
+        # Create two session files with different mtimes
+        old = _make_session_file(tmp_path, "old.jsonl")
+        new = _make_session_file(tmp_path, "new.jsonl")
+        os.utime(old, (1000, 1000))
+        os.utime(new, (2000, 2000))
+
+        # Patch discover_session_dirs to use our tmp_path
+        monkeypatch.setattr("sesh.watch.discover_session_dirs", lambda: [tmp_path])
+
+        result = find_latest_transcript()
+        assert result == new
+
+    def test_returns_none_when_empty(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("sesh.watch.discover_session_dirs", lambda: [tmp_path])
+        result = find_latest_transcript()
+        assert result is None
+
+    def test_returns_none_when_no_dirs(self, monkeypatch):
+        monkeypatch.setattr("sesh.watch.discover_session_dirs", lambda: [])
+        result = find_latest_transcript()
+        assert result is None
+
+    def test_finds_nested_files(self, tmp_path, monkeypatch):
+        """Should search recursively in subdirectories."""
+        nested = tmp_path / "project-abc"
+        nested.mkdir()
+        session = _make_session_file(nested, "deep.jsonl")
+
+        monkeypatch.setattr("sesh.watch.discover_session_dirs", lambda: [tmp_path])
+
+        result = find_latest_transcript()
+        assert result == session
 
 
 # --- Auto-ingestion with dedup ---

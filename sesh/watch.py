@@ -33,6 +33,37 @@ def discover_session_dirs() -> list[Path]:
     return dirs
 
 
+def find_latest_transcript() -> Path | None:
+    """Find the most recently modified session transcript.
+
+    Searches well-known session directories (e.g. ~/.claude/projects/)
+    and returns the newest JSONL file, or None if nothing found.
+    No settle time — returns whatever is newest, even if still being written.
+    """
+    dirs = discover_session_dirs()
+    if not dirs:
+        return None
+
+    newest: Path | None = None
+    newest_mtime: float = 0
+
+    for dir_path in dirs:
+        if not dir_path.is_dir():
+            continue
+        for path in dir_path.rglob("*.jsonl"):
+            if not path.is_file():
+                continue
+            try:
+                mtime = path.stat().st_mtime
+                if mtime > newest_mtime:
+                    newest = path
+                    newest_mtime = mtime
+            except OSError:
+                continue
+
+    return newest
+
+
 def find_transcript_files(
     directories: list[Path],
     settle_seconds: float = 60.0,

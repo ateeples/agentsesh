@@ -305,8 +305,8 @@ def main() -> None:
     debug_p.add_argument("--verbose", "-v", action="store_true", help="Show full thinking blocks")
 
     # --- Standalone commands (no DB required) ---
-    analyze_p = sub.add_parser("analyze", help="One-command session diagnostic (no database required)")
-    analyze_p.add_argument("file", help="Path to session transcript (JSONL)")
+    analyze_p = sub.add_parser("analyze", help="Session diagnostic (auto-detects most recent, or pass a file)")
+    analyze_p.add_argument("file", nargs="?", help="Path to session transcript (default: auto-detect most recent)")
     analyze_p.add_argument("--json", action="store_true", help="Output as JSON")
     analyze_p.add_argument("--verbose", "-v", action="store_true",
                            help="Include thinking context and grade breakdown")
@@ -317,6 +317,8 @@ def main() -> None:
     audit_p.add_argument("path", nargs="?", help="Path to repo (default: current directory)")
     audit_p.add_argument("--metric", help="Run only one metric (e.g. bootstrap, file_discipline)")
     audit_p.add_argument("--json", action="store_true", help="Output as JSON")
+    audit_p.add_argument("--threshold", type=int,
+                         help="Minimum score to pass (exit 1 if below). For CI gates.")
 
     # --- Background/daemon commands ---
     watch_p = sub.add_parser("watch", help="Auto-ingest new sessions from directories")

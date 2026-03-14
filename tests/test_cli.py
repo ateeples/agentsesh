@@ -214,3 +214,51 @@ class TestAnalyzeCLI:
         result = _run_sesh("analyze", str(session_file))
         assert result.returncode == 0
         assert "Session Analysis" in result.stdout
+
+    def test_analyze_no_args_no_sessions(self):
+        """analyze with no file and no discoverable sessions should error clearly."""
+        import os
+        env = os.environ.copy()
+        # Point HOME at an empty dir so discovery finds nothing
+        env["HOME"] = "/tmp/sesh-test-empty-home"
+        result = subprocess.run(
+            [sys.executable, "-m", "sesh", "analyze"],
+            capture_output=True, text=True, env=env,
+        )
+        assert result.returncode != 0
+        assert "no session" in result.stderr.lower() or "provide a file" in result.stderr.lower()
+
+
+# --- sesh audit CLI tests ---
+
+
+class TestAuditCLI:
+    """Tests for sesh audit — threshold exit codes."""
+
+    def test_audit_basic(self, tmp_path):
+        result = _run_sesh("audit", str(tmp_path))
+        assert result.returncode == 0
+
+    def test_audit_json(self, tmp_path):
+        result = _run_sesh("audit", str(tmp_path), "--json")
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert "score" in data
+        assert "grade" in data
+
+    def test_audit_threshold_pass(self, tmp_path):
+        """Score above threshold → exit 0."""
+        result = _run_sesh("audit", str(tmp_path), "--threshold", "0")
+        assert result.returncode == 0
+
+    def test_audit_threshold_fail(self, tmp_path):
+        """Empty repo scores low — threshold 100 should fail."""
+        result = _run_sesh("audit", str(tmp_path), "--threshold", "100")
+        assert result.returncode == 1
+
+    def test_audit_threshold_fail_json(self, tmp_path):
+        """--json + --threshold should still output JSON and exit 1."""
+        result = _run_sesh("audit", str(tmp_path), "--threshold", "100", "--json")
+        assert result.returncode == 1
+        data = json.loads(result.stdout)
+        assert "score" in data
