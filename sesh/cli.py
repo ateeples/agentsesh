@@ -312,6 +312,8 @@ def main() -> None:
                            help="Include thinking context and grade breakdown")
     analyze_p.add_argument("--fix", action="store_true",
                            help="Output CLAUDE.md patch only (ready to paste)")
+    analyze_p.add_argument("--feedback", nargs="?", const=True, default=None,
+                           help="Write session feedback to CLAUDE.md (or specify target file)")
 
     audit_p = sub.add_parser("audit", help="Grade a repo's agent-readiness (0-100, A+ to F)")
     audit_p.add_argument("path", nargs="?", help="Path to repo (default: current directory)")

@@ -215,6 +215,27 @@ class TestAnalyzeCLI:
         assert result.returncode == 0
         assert "Session Analysis" in result.stdout
 
+    def test_analyze_feedback_writes_claude_md(self, tmp_path):
+        """--feedback should write session findings to CLAUDE.md."""
+        session_file = _make_session_file(tmp_path)
+        result = _run_sesh("analyze", str(session_file), "--feedback", cwd=tmp_path)
+        assert result.returncode == 0
+        assert "Feedback written" in result.stdout
+        claude_md = tmp_path / "CLAUDE.md"
+        assert claude_md.exists()
+        text = claude_md.read_text()
+        assert "Last Session" in text
+        assert "sesh:feedback" in text
+
+    def test_analyze_feedback_custom_file(self, tmp_path):
+        """--feedback path should write to specified file."""
+        session_file = _make_session_file(tmp_path)
+        target = tmp_path / "MY_RULES.md"
+        result = _run_sesh("analyze", str(session_file), "--feedback", str(target), cwd=tmp_path)
+        assert result.returncode == 0
+        assert target.exists()
+        assert "sesh:feedback" in target.read_text()
+
     def test_analyze_no_args_no_sessions(self):
         """analyze with no file and no discoverable sessions should error clearly."""
         import os

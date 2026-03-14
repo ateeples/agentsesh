@@ -218,8 +218,26 @@ def cmd_analyze(args) -> None:
             print(patch)
         else:
             print("No CLAUDE.md changes recommended. Clean session.")
+    elif args.feedback:
+        _write_feedback(result, args)
     else:
         print(format_analysis(result, verbose=args.verbose))
+
+
+def _write_feedback(result, args) -> None:
+    """Generate session-specific feedback and write to CLAUDE.md."""
+    from ..feedback import generate_feedback, write_feedback
+
+    target = Path(args.feedback) if isinstance(args.feedback, str) and args.feedback is not True else Path("CLAUDE.md")
+
+    content = generate_feedback(result)
+    wrote = write_feedback(content, target)
+
+    grade = result.grade
+    if wrote:
+        print(f"Feedback written to {target} ({grade.grade}, {grade.score}/100)")
+    else:
+        print(f"No changes — {target} already has current feedback")
 
 
 def cmd_audit(args) -> None:
