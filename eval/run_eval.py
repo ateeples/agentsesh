@@ -39,8 +39,8 @@ CONFIGS_DIR = EVAL_DIR / "configs"
 TASKS_DIR = EVAL_DIR / "tasks"
 TRANSCRIPTS_DIR = EVAL_DIR / "transcripts"
 
-# MiniMax harness config
-HARNESS_CONFIG = Path.home() / "Documents" / "Projects" / "minimax-harness" / "config.json"
+# MiniMax harness config — set MINIMAX_API_KEY env var or point HARNESS_CONFIG to your config.json
+HARNESS_CONFIG = Path(os.environ.get("HARNESS_CONFIG", Path.home() / ".config" / "minimax-harness" / "config.json"))
 
 _AGENT_SYSTEM_TEMPLATE = (
     'You are a coding agent that builds software by using tools. You have access to these tools:\n\n'

@@ -25,7 +25,7 @@ from pathlib import Path
 EVAL_DIR = Path(__file__).parent
 PHRASING_DIR = EVAL_DIR / "tasks" / "phrasing"
 RESULTS_DIR = EVAL_DIR / "results" / "phrasing"
-HARNESS_CONFIG = Path.home() / "Documents" / "Projects" / "minimax-harness" / "config.json"
+HARNESS_CONFIG = Path(os.environ.get("HARNESS_CONFIG", Path.home() / ".config" / "minimax-harness" / "config.json"))
 
 # The prompt variants to test — from casual to surgical
 PROMPT_VARIANTS = [
