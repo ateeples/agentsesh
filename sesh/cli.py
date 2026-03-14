@@ -181,7 +181,7 @@ def cmd_reflect(args) -> None:
         session = db.get_session(sessions[0]["id"])
 
     if not session:
-        print(f"Session not found: {args.session_id}", file=sys.stderr)
+        print(f"Session not found: {args.session_id or '(most recent)'}", file=sys.stderr)
         sys.exit(4)
 
     tool_calls = db.get_tool_calls(session["id"])
@@ -231,7 +231,7 @@ def cmd_handoff(args) -> None:
         session = db.get_session(sessions[0]["id"])
 
     if not session:
-        print(f"Session not found: {args.session_id}", file=sys.stderr)
+        print(f"Session not found: {args.session_id or '(most recent)'}", file=sys.stderr)
         sys.exit(4)
 
     tool_calls = db.get_tool_calls(session["id"])
@@ -290,7 +290,7 @@ def cmd_export(args) -> None:
 
     session = db.get_session(args.session_id)
     if not session:
-        print(f"Session not found: {args.session_id}", file=sys.stderr)
+        print(f"Session not found: {args.session_id or '(most recent)'}", file=sys.stderr)
         sys.exit(4)
 
     tool_calls = db.get_tool_calls(session["id"])
@@ -314,7 +314,7 @@ def cmd_fix(args) -> None:
         session = db.get_session(sessions[0]["id"])
 
     if not session:
-        print(f"Session not found: {args.session_id}", file=sys.stderr)
+        print(f"Session not found: {args.session_id or '(most recent)'}", file=sys.stderr)
         sys.exit(4)
 
     patterns = db.get_patterns(session["id"])
@@ -326,7 +326,6 @@ def cmd_fix(args) -> None:
         return
 
     if args.json:
-        import json as json_mod
         data = []
         for r in remediations:
             data.append({
@@ -338,7 +337,7 @@ def cmd_fix(args) -> None:
                 "claude_md_snippet": r.claude_md_snippet,
                 "impact": r.impact,
             })
-        print(json_mod.dumps(data, indent=2))
+        print(json.dumps(data, indent=2))
     elif args.patch:
         # Output just the CLAUDE.md patch
         patch = generate_claude_md_patch(remediations)
@@ -406,30 +405,15 @@ def cmd_test(args) -> None:
     outcomes_b = extract_outcomes(tc_b)
 
     if args.json:
-        import json as json_mod
-        if args.compare:
-            comp = compare_outcomes(outcomes_a, outcomes_b)
-            print(json_mod.dumps({
-                "baseline": _outcome_to_dict(outcomes_a),
-                "candidate": _outcome_to_dict(outcomes_b),
-                "improvements": comp.improvements,
-                "regressions": comp.regressions,
-                "unchanged": comp.unchanged,
-                "verdict": comp.verdict,
-            }, indent=2))
-        else:
-            print(json_mod.dumps({
-                "session_a": {
-                    "id": session_a["id"],
-                    "grade": session_a.get("grade"),
-                    "outcomes": _outcome_to_dict(outcomes_a),
-                },
-                "session_b": {
-                    "id": session_b["id"],
-                    "grade": session_b.get("grade"),
-                    "outcomes": _outcome_to_dict(outcomes_b),
-                },
-            }, indent=2))
+        comp = compare_outcomes(outcomes_a, outcomes_b)
+        print(json.dumps({
+            "baseline": _outcome_to_dict(outcomes_a),
+            "candidate": _outcome_to_dict(outcomes_b),
+            "improvements": comp.improvements,
+            "regressions": comp.regressions,
+            "unchanged": comp.unchanged,
+            "verdict": comp.verdict,
+        }, indent=2))
     else:
         # Show outcomes side by side, then comparison
         print(f"# Baseline: {session_a['id'][:16]}... "
@@ -486,7 +470,7 @@ def cmd_replay(args) -> None:
         session = db.get_session(sessions[0]["id"])
 
     if not session:
-        print(f"Session not found: {args.session_id}", file=sys.stderr)
+        print(f"Session not found: {args.session_id or '(most recent)'}", file=sys.stderr)
         sys.exit(4)
 
     tool_calls = db.get_tool_calls(session["id"])
@@ -538,7 +522,6 @@ def cmd_replay(args) -> None:
     )
 
     if args.json:
-        import json as json_mod
         data = []
         for s in steps:
             entry = {
@@ -556,7 +539,7 @@ def cmd_replay(args) -> None:
             if args.verbose and s.detail:
                 entry["detail"] = s.detail
             data.append(entry)
-        print(json_mod.dumps({
+        print(json.dumps({
             "session_id": session["id"],
             "grade": session.get("grade"),
             "source": source,
@@ -587,7 +570,7 @@ def cmd_debug(args) -> None:
         session = db.get_session(sessions[0]["id"])
 
     if not session:
-        print(f"Session not found: {args.session_id}", file=sys.stderr)
+        print(f"Session not found: {args.session_id or '(most recent)'}", file=sys.stderr)
         sys.exit(4)
 
     source_path = session.get("source_path")
@@ -1072,8 +1055,6 @@ def main() -> None:
     test_p = sub.add_parser("test", help="Compare outcome metrics between sessions")
     test_p.add_argument("session_a", nargs="?", help="Baseline session ID (default: second most recent)")
     test_p.add_argument("session_b", nargs="?", help="Candidate session ID (default: most recent)")
-    test_p.add_argument("--compare", action="store_true", default=True,
-                        help="Show comparison (default)")
     test_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     # replay

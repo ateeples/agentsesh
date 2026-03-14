@@ -361,7 +361,10 @@ def parse_range(range_str: str) -> tuple[int, int]:
     """Parse a range string like '5-15' into (5, 15)."""
     parts = range_str.split("-")
     if len(parts) == 2:
-        return int(parts[0]), int(parts[1])
+        start, end = int(parts[0]), int(parts[1])
+        if start > end:
+            raise ValueError(f"Range start must be <= end: {range_str}")
+        return start, end
     elif len(parts) == 1:
         n = int(parts[0])
         return n, n
