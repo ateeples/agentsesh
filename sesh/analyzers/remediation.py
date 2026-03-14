@@ -6,7 +6,7 @@ the bad pattern harder or impossible. Procedural gates > advice.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

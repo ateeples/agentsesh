@@ -5,16 +5,14 @@ session comparison (improvements, regressions, verdict), and formatting.
 """
 
 import json
-import pytest
 
 from sesh.analyzers.outcomes import (
-    extract_outcomes,
-    compare_outcomes,
-    format_outcome_metrics,
-    format_comparison,
     OutcomeMetrics,
+    compare_outcomes,
+    extract_outcomes,
+    format_comparison,
+    format_outcome_metrics,
 )
-
 
 # --- Test helper ---
 

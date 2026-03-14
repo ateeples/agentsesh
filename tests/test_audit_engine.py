@@ -7,21 +7,18 @@ Covers: score-to-grade mapping, metric combination, metric registration,
 selective metric execution, and audit result construction.
 """
 
-import pytest
 from pathlib import Path
 
 from sesh.audit.engine import (
+    _REGISTRY,
     Finding,
     MetricResult,
-    AuditResult,
-    score_to_grade,
     combine_metrics,
-    register_metric,
     get_registered_metrics,
+    register_metric,
     run_audit,
-    _REGISTRY,
+    score_to_grade,
 )
-
 
 # --- Score-to-grade mapping (0-100 → A+ through F) ---
 

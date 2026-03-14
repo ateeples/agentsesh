@@ -7,22 +7,19 @@ Plus integration test against the agentsesh repo itself.
 import json
 from pathlib import Path
 
-import pytest
-
+from sesh.audit.engine import _REGISTRY, run_audit
+from sesh.audit.formatter import audit_to_json, format_audit_report
 from sesh.audit.metrics import (
+    detect_agent_instructions,
     detect_bootstrap,
+    detect_codebase_map,
+    detect_decision_records,
+    detect_doc_structure,
+    detect_file_discipline,
+    detect_linting,
     detect_task_entry_points,
     detect_validation_harness,
-    detect_linting,
-    detect_codebase_map,
-    detect_doc_structure,
-    detect_decision_records,
-    detect_agent_instructions,
-    detect_file_discipline,
 )
-from sesh.audit.engine import run_audit, _REGISTRY
-from sesh.audit.formatter import format_audit_report, audit_to_json
-
 
 # ============================================================
 # Bootstrap

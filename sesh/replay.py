@@ -10,7 +10,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .parsers.base import ToolCall, Pattern, classify_tool
+from .parsers.base import Pattern
 
 
 @dataclass

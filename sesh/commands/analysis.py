@@ -4,22 +4,22 @@ import json
 import sys
 from pathlib import Path
 
-from ._resolve import get_db
+from ..analyze import analysis_to_json, analyze_session, format_analysis
+from ..analyzers.outcomes import (
+    compare_outcomes,
+    extract_outcomes,
+    format_comparison,
+    format_outcome_metrics,
+)
 from ..analyzers.remediation import (
-    get_all_remediations,
     format_remediations,
     generate_claude_md_patch,
+    get_all_remediations,
 )
-from ..analyzers.outcomes import (
-    extract_outcomes,
-    compare_outcomes,
-    format_outcome_metrics,
-    format_comparison,
-)
-from ..analyze import analyze_session, format_analysis, analysis_to_json
 from ..audit import _metrics  # noqa: F401 — triggers detector registration
 from ..audit.engine import run_audit
-from ..audit.formatter import format_audit_report, audit_to_json
+from ..audit.formatter import audit_to_json, format_audit_report
+from ._resolve import get_db
 
 
 def cmd_fix(args) -> None:

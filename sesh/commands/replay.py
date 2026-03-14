@@ -3,16 +3,16 @@
 import json
 import sys
 
-from ._resolve import get_db
+from ..analyzers.patterns import detect_all_patterns as redetect_patterns
+from ..parsers.base import ToolCall
 from ..replay import (
-    build_timeline,
     annotate_timeline,
+    build_timeline,
     filter_steps,
     format_replay,
     parse_range,
 )
-from ..analyzers.patterns import detect_all_patterns as redetect_patterns
-from ..parsers.base import ToolCall
+from ._resolve import get_db
 
 
 def cmd_replay(args) -> None:

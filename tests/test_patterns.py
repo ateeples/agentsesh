@@ -5,21 +5,19 @@ sequences. Tests verify both positive detection (pattern present) and
 negative detection (pattern absent / below threshold).
 """
 
-import pytest
-from sesh.parsers.base import ToolCall
 from sesh.analyzers.patterns import (
-    detect_repeated_searches,
-    detect_write_without_read,
+    detect_all_patterns,
+    detect_bash_overuse,
     detect_error_rate,
     detect_error_streak,
     detect_low_read_ratio,
-    detect_bash_overuse,
-    detect_write_then_read,
-    detect_scattered_files,
     detect_missed_parallelism,
-    detect_all_patterns,
+    detect_repeated_searches,
+    detect_scattered_files,
+    detect_write_then_read,
+    detect_write_without_read,
 )
-
+from sesh.parsers.base import ToolCall
 
 # --- Test helper ---
 

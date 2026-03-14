@@ -13,16 +13,14 @@ Usage:
 import json
 import os
 import sys
-import time
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
+from ..analyzers.trends import analyze_trends
 from ..config import Config, find_config, find_sesh_dir
 from ..db import Database
-from ..analyzers.trends import analyze_trends
-from ..formatters.handoff import format_handoff
 
 # Re-resolve DB per request to avoid stale connections across threads
 _db_lock = threading.Lock()

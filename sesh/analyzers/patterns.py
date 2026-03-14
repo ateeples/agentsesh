@@ -67,11 +67,7 @@ def detect_write_without_read(
     blind_edits: list[int] = []
 
     for i, tc in enumerate(tool_calls):
-        if tc.name == "Read":
-            path = tc.input_data.get("file_path", "")
-            if path:
-                files_known.add(path)
-        elif tc.name == "Write":
+        if tc.name == "Read" or tc.name == "Write":
             path = tc.input_data.get("file_path", "")
             if path:
                 files_known.add(path)
@@ -178,7 +174,7 @@ def _is_runner_command(cmd: str) -> bool:
     # Also handle && chains — check the last command in the chain
     if "&&" in primary:
         primary = primary.rsplit("&&", 1)[-1].strip()
-    from ..analyzers.outcomes import TEST_PATTERNS, BUILD_PATTERNS, LINT_PATTERNS
+    from ..analyzers.outcomes import BUILD_PATTERNS, LINT_PATTERNS, TEST_PATTERNS
     return bool(
         TEST_PATTERNS.search(primary)
         or BUILD_PATTERNS.search(primary)

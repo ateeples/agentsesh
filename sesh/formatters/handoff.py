@@ -9,7 +9,6 @@ Output sections:
 - Process notes: patterns detected, remediation hints
 """
 
-from collections import Counter
 from pathlib import Path
 
 
@@ -26,7 +25,7 @@ def format_handoff(session: dict, tool_calls: list[dict], patterns: list[dict]) 
     """
     lines = []
     lines.append(f"# Session Handoff: {session['id']}")
-    lines.append(f"Generated from sesh analysis")
+    lines.append("Generated from sesh analysis")
     lines.append("")
 
     # --- What was done ---
@@ -112,9 +111,7 @@ def _extract_actions(tool_calls: list[dict]) -> list[str]:
         elif name == "Bash":
             cmd = inp_data.get("command", "")
             # Summarize interesting bash commands
-            if cmd.startswith("git "):
-                actions.append(f"Ran: {cmd[:80]}")
-            elif cmd.startswith("python") or cmd.startswith("npm") or cmd.startswith("pip"):
+            if cmd.startswith("git ") or cmd.startswith("python") or cmd.startswith("npm") or cmd.startswith("pip"):
                 actions.append(f"Ran: {cmd[:80]}")
             elif "test" in cmd.lower():
                 actions.append(f"Ran tests: {cmd[:80]}")

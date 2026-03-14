@@ -8,17 +8,17 @@ import json
 import sys
 from pathlib import Path
 
-from ._resolve import get_db
-from ..replay import build_timeline
+from ..analyzers.patterns import detect_all_patterns as redetect_patterns
 from ..debug import (
+    correlate_patterns,
     extract_decision_points,
-    search_thinking,
     lookup_by_action,
     search_dotnotes,
-    correlate_patterns,
+    search_thinking,
 )
-from ..analyzers.patterns import detect_all_patterns as redetect_patterns
 from ..parsers.base import ToolCall
+from ..replay import build_timeline
+from ._resolve import get_db
 
 
 def cmd_debug(args) -> None:

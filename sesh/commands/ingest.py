@@ -3,9 +3,9 @@
 import sys
 from pathlib import Path
 
-from ._resolve import get_db, get_config
 from ..parsers import parse_transcript
 from ..watch import discover_session_dirs, ingest_new_files, watch_loop
+from ._resolve import get_config, get_db
 
 
 def cmd_log(args) -> None:

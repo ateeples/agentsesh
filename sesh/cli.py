@@ -5,25 +5,24 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .config import Config, find_config, find_sesh_dir, DEFAULT_CONFIG
-from .db import Database
-from .formatters.report import (
-    format_session_report,
-    format_trend_report,
-    format_session_list,
-    format_stats,
-    format_search_results,
-)
-from .formatters.handoff import format_handoff
-from .formatters.json_out import session_to_json, trend_to_json, to_json
 from .analyzers.trends import analyze_trends
+from .commands.analysis import cmd_analyze, cmd_audit, cmd_fix, cmd_test
 
 # Command handlers split into domain modules
 from .commands.debug import cmd_debug
-from .commands.replay import cmd_replay
 from .commands.ingest import cmd_log, cmd_watch
-from .commands.analysis import cmd_fix, cmd_test, cmd_analyze, cmd_audit
-
+from .commands.replay import cmd_replay
+from .config import Config, find_config, find_sesh_dir
+from .db import Database
+from .formatters.handoff import format_handoff
+from .formatters.json_out import session_to_json, to_json, trend_to_json
+from .formatters.report import (
+    format_search_results,
+    format_session_list,
+    format_session_report,
+    format_stats,
+    format_trend_report,
+)
 
 # --- Database and config resolution ---
 
@@ -82,7 +81,7 @@ def cmd_init(args) -> None:
     print(f"Initialized .sesh/ at {sesh_dir}")
     print(f"  Database: {sesh_dir / 'sesh.db'}")
     print(f"  Config:   {sesh_dir / 'config.json'}")
-    print(f"  Add .sesh/ to your project's .gitignore")
+    print("  Add .sesh/ to your project's .gitignore")
 
 
 def cmd_reflect(args) -> None:

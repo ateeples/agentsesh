@@ -26,7 +26,6 @@ from pathlib import Path
 
 from .base import BaseParser, Event, NormalizedSession, ToolCall, classify_tool
 
-
 # Map Codex tool names to AgentSesh-compatible names for classification
 _CODEX_TOOL_MAP = {
     "exec_command": "Bash",

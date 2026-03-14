@@ -7,9 +7,6 @@ recurring patterns, tool usage distribution, duration trends.
 from collections import Counter
 from dataclasses import dataclass, field
 
-from ..parsers.base import Pattern
-
-
 GRADE_SCORES = {"A+": 97, "A": 92, "B": 80, "C": 65, "D": 50, "F": 30, "N/A": 0}
 
 

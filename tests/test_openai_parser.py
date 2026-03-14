@@ -6,14 +6,10 @@ edge cases (missing fields, empty sessions, interleaved types).
 """
 
 import json
-import tempfile
 from pathlib import Path
 
-import pytest
-
-from sesh.parsers.openai_codex import OpenAICodexParser, _is_tool_error, _parse_tool_output
 from sesh.parsers import auto_detect_parser, parse_transcript
-
+from sesh.parsers.openai_codex import OpenAICodexParser, _is_tool_error, _parse_tool_output
 
 # --- Test helpers ---
 

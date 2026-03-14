@@ -4,15 +4,13 @@ Covers: pattern-to-remediation mapping, severity classification,
 CLAUDE.md patch generation, and human-readable formatting.
 """
 
-import pytest
 from sesh.analyzers.remediation import (
-    get_remediation,
-    get_all_remediations,
+    Remediation,
     format_remediations,
     generate_claude_md_patch,
-    Remediation,
+    get_all_remediations,
+    get_remediation,
 )
-
 
 # --- Pattern-to-remediation mapping ---
 

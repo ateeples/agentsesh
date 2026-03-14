@@ -18,8 +18,7 @@ from pathlib import Path
 
 from .config import Config
 from .db import Database
-from .parsers import parse_transcript, auto_detect_parser
-
+from .parsers import auto_detect_parser, parse_transcript
 
 # Well-known session directories
 CLAUDE_CODE_SESSIONS = Path.home() / ".claude" / "projects"

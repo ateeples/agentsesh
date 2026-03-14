@@ -5,12 +5,10 @@ They are display-only — no analysis logic lives here.
 """
 
 from collections import Counter
-from pathlib import Path
 
-from ..analyzers.remediation import get_all_remediations, format_remediations
+from ..analyzers.remediation import format_remediations, get_all_remediations
 from ..analyzers.trends import TrendReport
 from ..parsers.base import classify_tool
-
 
 # --- Session report ---
 

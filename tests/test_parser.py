@@ -6,13 +6,12 @@ edge cases (empty files, malformed JSON, missing fields).
 """
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
-from sesh.parsers.claude_code import ClaudeCodeParser
-from sesh.parsers import parse_transcript
 
+from sesh.parsers import parse_transcript
+from sesh.parsers.claude_code import ClaudeCodeParser
 
 # --- Test fixtures and helpers ---
 

@@ -7,11 +7,9 @@ init, log, reflect, analyze, audit, and watch --once.
 import json
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
-
 
 # --- Test helpers ---
 

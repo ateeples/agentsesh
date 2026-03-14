@@ -10,7 +10,7 @@ Each line is a JSON object with:
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 from .base import BaseParser, Event, NormalizedSession, ToolCall, classify_tool
