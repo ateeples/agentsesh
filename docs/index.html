@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>sesh — Agent Session Intelligence</title>
-<meta name="description" content="Behavioral analysis, grading, and self-improvement for AI coding agents. Analyze Claude Code and OpenAI Codex sessions.">
+<meta name="description" content="Two commands. Zero setup. Analyze AI coding sessions and grade repo readiness. Closed-loop improvement for Claude Code and OpenAI Codex agents.">
 <style>
   :root {
     --bg: #0a0a0a;
@@ -68,7 +68,6 @@
   }
 
   .install-box:hover { border-color: var(--accent); }
-
   .install-box .prompt { color: var(--dim); }
   .install-box .cmd { color: var(--green); }
 
@@ -107,8 +106,15 @@
     letter-spacing: -0.5px;
   }
 
-  /* Grade demo */
-  .grade-demo {
+  section .subtitle {
+    font-size: 14px;
+    color: var(--dim);
+    margin-top: -16px;
+    margin-bottom: 24px;
+  }
+
+  /* Terminal demo */
+  .demo {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -117,15 +123,25 @@
     white-space: pre;
     overflow-x: auto;
     line-height: 1.8;
+    margin-bottom: 16px;
   }
 
-  .grade-demo .g { color: var(--green); }
-  .grade-demo .a { color: var(--amber); }
-  .grade-demo .r { color: var(--red); }
-  .grade-demo .d { color: var(--dim); }
-  .grade-demo .b { color: var(--accent); }
+  .demo .g { color: var(--green); }
+  .demo .a { color: var(--amber); }
+  .demo .r { color: var(--red); }
+  .demo .d { color: var(--dim); }
+  .demo .b { color: var(--accent); }
+  .demo .prompt { color: var(--dim); }
 
-  /* Features */
+  .demo + .demo-label {
+    font-size: 12px;
+    color: var(--dim);
+    text-align: right;
+    margin-top: -12px;
+    margin-bottom: 24px;
+  }
+
+  /* Features grid */
   .features {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -151,40 +167,32 @@
     line-height: 1.6;
   }
 
-  /* Interfaces */
-  .interfaces {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 16px;
-  }
-
-  .interface {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
-    text-align: center;
-  }
-
-  .interface h3 {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 4px;
-  }
-
-  .interface .who {
-    font-size: 12px;
-    color: var(--dim);
-    margin-bottom: 12px;
-  }
-
-  .interface code {
+  .feature code {
     font-size: 12px;
     color: var(--green);
     background: var(--bg);
-    padding: 4px 8px;
+    padding: 2px 6px;
     border-radius: 4px;
   }
+
+  /* Patterns + metrics */
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .chip {
+    font-size: 13px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-radius: 6px;
+    border-left: 3px solid var(--border);
+  }
+
+  .chip.warn { border-left-color: var(--amber); }
+  .chip.concern { border-left-color: var(--red); }
+  .chip.good { border-left-color: var(--green); }
 
   /* Formats */
   .formats {
@@ -204,24 +212,6 @@
   .format .label { color: var(--text); font-weight: 600; }
   .format .status { color: var(--green); font-size: 12px; }
 
-  /* Patterns list */
-  .patterns {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 8px;
-  }
-
-  .pattern {
-    font-size: 13px;
-    padding: 8px 12px;
-    background: var(--surface);
-    border-radius: 6px;
-    border-left: 3px solid var(--border);
-  }
-
-  .pattern.warn { border-left-color: var(--amber); }
-  .pattern.concern { border-left-color: var(--red); }
-
   /* Footer */
   footer {
     padding: 48px 0;
@@ -238,8 +228,8 @@
   @media (max-width: 600px) {
     .hero { padding: 48px 0 40px; }
     .hero h1 { font-size: 32px; }
-    .features, .interfaces, .patterns { grid-template-columns: 1fr; }
-    .grade-demo { font-size: 12px; padding: 16px; }
+    .features, .grid-3 { grid-template-columns: 1fr; }
+    .demo { font-size: 12px; padding: 16px; }
   }
 </style>
 </head>
@@ -248,73 +238,137 @@
 <div class="container">
   <div class="hero">
     <h1><span>sesh</span></h1>
-    <p class="tagline">Agent session intelligence for AI coding agents</p>
+    <p class="tagline">Two commands. Zero setup. Your agents get better every session.</p>
     <div class="install-box" onclick="copyInstall()">
       <span class="copied" id="copied">copied</span>
       <span class="prompt">$</span> <span class="cmd">pip install agentsesh</span>
     </div>
-    <p class="version">v0.4.0 &middot; Python 3.10+ &middot; zero dependencies &middot; <a href="https://github.com/ateeples/agentsesh">GitHub</a></p>
+    <p class="version">v0.10.0 &middot; Python 3.10+ &middot; zero dependencies &middot; <a href="https://github.com/ateeples/agentsesh">GitHub</a></p>
   </div>
 
   <section>
-    <h2>What it does</h2>
-    <div class="grade-demo"><span class="d"># Ingest and grade a session</span>
-<span class="prompt">$</span> sesh log ~/.claude/projects/myapp/*.jsonl
-  <span class="g">[A-]</span> session-2026-03-13.jsonl — 47 calls, 1 error, 0 patterns
+    <h2>Diagnose any session</h2>
+    <p class="subtitle">Auto-finds your most recent Claude Code session. No database, no config.</p>
+    <div class="demo"><span class="prompt">$</span> sesh analyze
 
-<span class="d"># See what happened</span>
-<span class="prompt">$</span> sesh reflect --last 1
-<span class="b">Session:</span> session-2026-03-13
-<span class="b">Grade:</span>   <span class="g">A- (91/100)</span>
+<span class="b">Session Analysis</span>
+<span class="b">Grade:</span>   <span class="g">B (82/100)</span>
 <span class="b">Model:</span>   claude-opus-4-6
-<span class="b">Duration:</span> 34 min · 47 tool calls · 1 error
+<span class="b">Stats:</span>   125 tool calls &middot; 4 errors &middot; 12/14 tests passed
 
 <span class="b">Patterns:</span>
-  <span class="a">⚠ missed_parallelism</span> 2 independent reads done sequentially
+  <span class="a">[!] bash_overuse</span>    7/44 Bash calls used cat/grep — use dedicated tools
+  <span class="a">[!] write_then_read</span> Write-before-read phase at calls 26-35
 
-<span class="b">Deductions:</span>
-  -2  error rate (2.1%)
-  -5  missed parallelism (2 cases)
-  -2  low read ratio (0.45)
+<span class="b">Failure Points:</span>
+  <span class="r">[blind_edit]</span> at 2m — edited auth.py without reading it first
 
-<span class="b">Bonuses:</span>
-  +3  high read ratio bonus (reads before writes)
-  +2  zero blind edits</div>
+<span class="b">Remediations:</span>
+  - Use Read/Grep/Glob instead of Bash for file operations
+  - Research before implementation</div>
   </section>
 
   <section>
-    <h2>Three interfaces, one engine</h2>
-    <div class="interfaces">
-      <div class="interface">
-        <h3>CLI</h3>
-        <p class="who">Developers</p>
-        <code>sesh reflect</code>
-      </div>
-      <div class="interface">
-        <h3>MCP Server</h3>
-        <p class="who">Agents at runtime</p>
-        <code>sesh-mcp</code>
-      </div>
-      <div class="interface">
-        <h3>Web Dashboard</h3>
-        <p class="who">Observability</p>
-        <code>sesh-web</code>
-      </div>
+    <h2>Grade any repo</h2>
+    <p class="subtitle">9 metrics that measure agent-readiness. Works on any codebase.</p>
+    <div class="demo"><span class="prompt">$</span> sesh audit
+
+<span class="b">Repo Audit</span>
+<span class="b">Score:</span> <span class="g">89/100  Grade: B</span>
+
+  bootstrap           <span class="g">[10/10] ██████████</span>
+  task_entry_points   <span class="a">[ 6/10] ██████░░░░</span>
+  validation_harness  <span class="g">[10/10] ██████████</span>
+  linting             <span class="g">[ 8/10] ████████░░</span>
+  codebase_map        <span class="g">[10/10] ██████████</span>
+  doc_structure       <span class="g">[10/10] ██████████</span>
+  decision_records    <span class="g">[10/10] ██████████</span>
+  agent_instructions  <span class="g">[ 8/10] ████████░░</span>
+  file_discipline     <span class="g">[ 8/10] ████████░░</span></div>
+  </section>
+
+  <section>
+    <h2>Close the loop</h2>
+    <p class="subtitle">Findings land in your agent's context. Next session, behavior changes.</p>
+    <div class="demo"><span class="prompt">$</span> sesh analyze --feedback
+<span class="g">Feedback written to CLAUDE.md (B, 82/100)</span>
+
+<span class="d"># What gets written:</span>
+<span class="b">## Last Session: B (82/100) — 2026-03-14</span>
+
+125 tool calls. 4 errors. 12/14 tests passed.
+
+<span class="b">This session, focus on:</span>
+- Use Read/Grep/Glob instead of Bash (7 instances last session)
+- Read and explore before writing — understand first, then implement</div>
+    <p class="demo-label">Replaces previous feedback on each run. Agents see it on boot.</p>
+  </section>
+
+  <section>
+    <h2>CI gate</h2>
+    <p class="subtitle">One line in your pipeline. Fail the build if repo readiness drops.</p>
+    <div class="demo"><span class="d"># In your CI config:</span>
+<span class="prompt">$</span> sesh audit --threshold 80 --json
+
+<span class="d"># Exit code 0 if score >= 80, exit code 1 if below.</span>
+<span class="d"># JSON output for programmatic consumption.</span></div>
+  </section>
+
+  <section>
+    <h2>What it detects</h2>
+    <div class="grid-3" style="margin-bottom: 32px;">
+      <div class="chip warn">bash overuse</div>
+      <div class="chip concern">blind edits</div>
+      <div class="chip warn">error streaks</div>
+      <div class="chip warn">write-then-read</div>
+      <div class="chip warn">missed parallelism</div>
+      <div class="chip warn">path guessing</div>
+      <div class="chip warn">repeated searches</div>
+      <div class="chip warn">scattered files</div>
+      <div class="chip warn">low read ratio</div>
+    </div>
+
+    <h2>What it audits</h2>
+    <div class="grid-3">
+      <div class="chip good">bootstrap setup</div>
+      <div class="chip good">task entry points</div>
+      <div class="chip good">validation harness</div>
+      <div class="chip good">linting config</div>
+      <div class="chip good">codebase map</div>
+      <div class="chip good">doc structure</div>
+      <div class="chip good">decision records</div>
+      <div class="chip good">agent instructions</div>
+      <div class="chip good">file discipline</div>
     </div>
   </section>
 
   <section>
-    <h2>9 anti-pattern detectors</h2>
-    <div class="patterns">
-      <div class="pattern warn">repeated searches</div>
-      <div class="pattern concern">blind edits</div>
-      <div class="pattern warn">high error rate</div>
-      <div class="pattern concern">error streaks</div>
-      <div class="pattern warn">low read ratio</div>
-      <div class="pattern warn">bash overuse</div>
-      <div class="pattern warn">write-then-read</div>
-      <div class="pattern warn">scattered files</div>
-      <div class="pattern warn">missed parallelism</div>
+    <h2>How it works</h2>
+    <div class="features">
+      <div class="feature">
+        <h3>Auto-discovery</h3>
+        <p><code>sesh analyze</code> finds your most recent session automatically. No file paths needed.</p>
+      </div>
+      <div class="feature">
+        <h3>Closed-loop feedback</h3>
+        <p><code>--feedback</code> writes findings to CLAUDE.md. Each run replaces the last. Agents improve.</p>
+      </div>
+      <div class="feature">
+        <h3>Zero dependencies</h3>
+        <p>Pure Python stdlib. No external packages. Installs in seconds.</p>
+      </div>
+      <div class="feature">
+        <h3>Machine-readable</h3>
+        <p><code>--json</code> on every command. Exit codes for CI. Built for automation.</p>
+      </div>
+      <div class="feature">
+        <h3>Session replay</h3>
+        <p>Step-by-step playback with pattern annotations. See exactly what happened.</p>
+      </div>
+      <div class="feature">
+        <h3>Prompt debugging</h3>
+        <p>Search agent thinking blocks. Find the decision point behind any action.</p>
+      </div>
     </div>
   </section>
 
@@ -330,40 +384,11 @@
     </div>
   </section>
 
-  <section>
-    <h2>Features</h2>
-    <div class="features">
-      <div class="feature">
-        <h3>Grading</h3>
-        <p>0-100 score with A+ to F grades. Deductions for anti-patterns, bonuses for good habits.</p>
-      </div>
-      <div class="feature">
-        <h3>Trend analysis</h3>
-        <p>Track improvement or regression across sessions. Spot recurring patterns.</p>
-      </div>
-      <div class="feature">
-        <h3>Auto-discovery</h3>
-        <p><code>sesh watch</code> monitors transcript directories and auto-ingests new sessions.</p>
-      </div>
-      <div class="feature">
-        <h3>Full-text search</h3>
-        <p>Search past sessions by tool calls, patterns, or raw text.</p>
-      </div>
-      <div class="feature">
-        <h3>Handoff docs</h3>
-        <p>Generate context handoff documents for session continuity.</p>
-      </div>
-      <div class="feature">
-        <h3>Zero dependencies</h3>
-        <p>Pure Python stdlib. No external packages required for core functionality.</p>
-      </div>
-    </div>
-  </section>
-
   <footer>
     Built by <a href="https://github.com/ateeples">Andy Teeples</a> &amp; Opus &middot;
     <a href="https://github.com/ateeples/agentsesh">Source</a> &middot;
-    <a href="https://pypi.org/project/agentsesh/">PyPI</a>
+    <a href="https://pypi.org/project/agentsesh/">PyPI</a> &middot;
+    <a href="https://github.com/ateeples/agentsesh/blob/main/CHANGELOG.md">Changelog</a>
   </footer>
 </div>
 
