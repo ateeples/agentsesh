@@ -9,6 +9,7 @@ Detectors self-register at module load via register_metric().
 
 import contextlib
 import json as json_mod
+import os
 import re
 from pathlib import Path
 
@@ -815,14 +816,14 @@ def _walk_source_files(repo_path: Path, limit: int = 200):
     Capped at `limit` to prevent slow scans on huge repos.
     """
     count = 0
-    for root, dirs, files in repo_path.walk():
+    for root, dirs, files in os.walk(repo_path):
         # Prune skip dirs
         dirs[:] = [d for d in dirs if d not in _SKIP_DIRS and not d.startswith(".")]
 
         for fname in files:
             if count >= limit:
                 return
-            fpath = root / fname
+            fpath = Path(root) / fname
             if fpath.suffix in _SOURCE_EXTENSIONS:
                 yield fpath
                 count += 1
