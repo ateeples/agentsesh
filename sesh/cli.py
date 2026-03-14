@@ -1,36 +1,12 @@
 """CLI interface for sesh — Agent Session Intelligence."""
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
 from . import __version__
 from .config import Config, find_config, find_sesh_dir, DEFAULT_CONFIG
 from .db import Database
-from .parsers import parse_transcript
-from .analyzers.trends import analyze_trends
-from .analyzers.remediation import (
-    get_all_remediations,
-    format_remediations,
-    generate_claude_md_patch,
-)
-from .analyzers.outcomes import (
-    extract_outcomes,
-    compare_outcomes,
-    format_outcome_metrics,
-    format_comparison,
-)
-from .replay import (
-    build_timeline,
-    annotate_timeline,
-    filter_steps,
-    format_replay,
-    parse_range,
-)
-from .analyzers.patterns import detect_all_patterns as redetect_patterns
-from .parsers.base import ToolCall
-from .debug import extract_decision_points, search_thinking, lookup_by_action, index_dotnotes, search_dotnotes, correlate_patterns
 from .formatters.report import (
     format_session_report,
     format_trend_report,
@@ -40,11 +16,13 @@ from .formatters.report import (
 )
 from .formatters.handoff import format_handoff
 from .formatters.json_out import session_to_json, trend_to_json, to_json
-from .watch import discover_session_dirs, ingest_new_files, watch_loop
-from .analyze import analyze_session, format_analysis, analysis_to_json
-from .audit import _metrics  # noqa: F401 — triggers detector registration
-from .audit.engine import run_audit
-from .audit.formatter import format_audit_report, audit_to_json
+from .analyzers.trends import analyze_trends
+
+# Command handlers split into domain modules
+from .commands.debug import cmd_debug
+from .commands.replay import cmd_replay
+from .commands.ingest import cmd_log, cmd_watch
+from .commands.analysis import cmd_fix, cmd_test, cmd_analyze, cmd_audit
 
 
 # --- Database and config resolution ---
@@ -77,9 +55,7 @@ def _get_config() -> Config:
     return Config(config_path)
 
 
-# --- Subcommands ---
-# Each cmd_* function handles one CLI subcommand.
-# All follow the pattern: resolve args → get DB → do work → close DB.
+# --- Simple subcommands (kept here — small, self-contained) ---
 
 
 def cmd_init(args) -> None:
@@ -109,74 +85,6 @@ def cmd_init(args) -> None:
     print(f"  Add .sesh/ to your project's .gitignore")
 
 
-def cmd_log(args) -> None:
-    """Ingest a session transcript."""
-    config = _get_config()
-    db = _get_db(args)
-
-    # Resolve input: single file or batch directory
-    paths = []
-    if args.dir:
-        dir_path = Path(args.dir)
-        if not dir_path.is_dir():
-            print(f"Error: {args.dir} is not a directory", file=sys.stderr)
-            sys.exit(1)
-        paths = sorted(dir_path.iterdir())
-    elif args.file:
-        paths = [Path(args.file)]
-    else:
-        print("Error: Provide a file or --dir", file=sys.stderr)
-        sys.exit(2)
-
-    # Track ingestion results for summary
-    ingested = 0
-    skipped = 0
-    errors = 0
-
-    for path in paths:
-        if not path.is_file():
-            continue
-        try:
-            fmt = args.format if args.format != "auto" else None
-            session = parse_transcript(path, format_hint=fmt)
-        except ValueError as e:
-            if not args.quiet:
-                print(f"  Skip {path.name}: {e}", file=sys.stderr)
-            skipped += 1
-            continue
-
-        if not session.tool_calls:
-            if not args.quiet:
-                print(f"  Skip {path.name}: no tool calls", file=sys.stderr)
-            skipped += 1
-            continue
-
-        try:
-            result = db.ingest_session(
-                session,
-                thresholds=config.pattern_thresholds,
-                grading_weights=config.grading_weights,
-            )
-            ingested += 1
-            if not args.quiet:
-                print(
-                    f"  [{result['grade']}] {path.name} — "
-                    f"{result['tool_calls']} calls, {result['errors']} errors, "
-                    f"{result['patterns']} patterns"
-                )
-        except ValueError:
-            # Already exists
-            skipped += 1
-        except Exception as e:
-            print(f"  Error ingesting {path.name}: {e}", file=sys.stderr)
-            errors += 1
-
-    db.close()
-
-    if not args.quiet:
-        print(f"\nIngested {ingested}, skipped {skipped}, errors {errors}")
-
-
 def cmd_reflect(args) -> None:
     """Analyze a session."""
     db = _get_db(args)
@@ -184,7 +92,6 @@ def cmd_reflect(args) -> None:
     if args.session_id:
         session = db.get_session(args.session_id)
     else:
-        # Most recent
         sessions = db.list_sessions(limit=1)
         if not sessions:
             print("No sessions found. Run `sesh log` first.", file=sys.stderr)
@@ -311,711 +218,6 @@ def cmd_export(args) -> None:
     db.close()
 
 
-def cmd_fix(args) -> None:
-    """Generate remediation recommendations for a session."""
-    db = _get_db(args)
-
-    if args.session_id:
-        session = db.get_session(args.session_id)
-    else:
-        sessions = db.list_sessions(limit=1)
-        if not sessions:
-            print("No sessions found. Run `sesh log` first.", file=sys.stderr)
-            sys.exit(3)
-        session = db.get_session(sessions[0]["id"])
-
-    if not session:
-        print(f"Session not found: {args.session_id or '(most recent)'}", file=sys.stderr)
-        sys.exit(4)
-
-    patterns = db.get_patterns(session["id"])
-    remediations = get_all_remediations(patterns)
-
-    if not remediations:
-        print(f"Session {session['id'][:16]}... ({session.get('grade', '?')}) — no anti-patterns detected. Clean session.")
-        db.close()
-        return
-
-    if args.json:
-        data = []
-        for r in remediations:
-            data.append({
-                "pattern_type": r.pattern_type,
-                "title": r.title,
-                "severity": r.severity,
-                "description": r.description,
-                "actions": r.actions,
-                "claude_md_snippet": r.claude_md_snippet,
-                "impact": r.impact,
-            })
-        print(json.dumps(data, indent=2))
-    elif args.patch:
-        # Output just the CLAUDE.md patch
-        patch = generate_claude_md_patch(remediations)
-        if patch:
-            print(patch)
-        else:
-            print("No CLAUDE.md changes recommended.")
-    else:
-        # Full remediation report
-        print(f"# Remediations for {session['id'][:16]}...")
-        print(f"  Grade: {session.get('grade', '?')} (score: {session.get('score', 0)})")
-        print(f"  Patterns: {len(patterns)} detected")
-        print()
-        print(format_remediations(remediations, include_snippets=True))
-
-    db.close()
-
-
-def cmd_test(args) -> None:
-    """Compare outcome metrics between sessions (behavioral regression testing).
-
-    Extracts test/build/lint results from two sessions and compares them.
-    Shows improvements, regressions, and unchanged metrics.
-    """
-    db = _get_db(args)
-
-    # Need session list for auto-resolution when IDs not specified
-    sessions = db.list_sessions(limit=20)
-    if not sessions:
-        print("No sessions found. Run `sesh log` first.", file=sys.stderr)
-        sys.exit(3)
-
-    # Session resolution: explicit pair, one vs most-recent, or two most-recent
-    if args.session_a and args.session_b:
-        session_a = db.get_session(args.session_a)
-        session_b = db.get_session(args.session_b)
-        if not session_a:
-            print(f"Session not found: {args.session_a}", file=sys.stderr)
-            sys.exit(4)
-        if not session_b:
-            print(f"Session not found: {args.session_b}", file=sys.stderr)
-            sys.exit(4)
-    elif args.session_a:
-        # Compare specified session (baseline) against most recent (candidate)
-        session_a = db.get_session(args.session_a)
-        if not session_a:
-            print(f"Session not found: {args.session_a}", file=sys.stderr)
-            sys.exit(4)
-        # Most recent that isn't session_a
-        for s in sessions:
-            if s["id"] != args.session_a:
-                session_b = db.get_session(s["id"])
-                break
-        else:
-            print("Need at least 2 sessions to compare.", file=sys.stderr)
-            sys.exit(3)
-    else:
-        # No session specified: compare two most recent (older=baseline, newer=candidate)
-        if len(sessions) < 2:
-            print("Need at least 2 sessions to compare.", file=sys.stderr)
-            sys.exit(3)
-        session_a = db.get_session(sessions[1]["id"])  # older = baseline
-        session_b = db.get_session(sessions[0]["id"])  # newer = candidate
-
-    tc_a = db.get_tool_calls(session_a["id"])
-    tc_b = db.get_tool_calls(session_b["id"])
-
-    outcomes_a = extract_outcomes(tc_a)
-    outcomes_b = extract_outcomes(tc_b)
-
-    if args.json:
-        comp = compare_outcomes(outcomes_a, outcomes_b)
-        print(json.dumps({
-            "baseline": _outcome_to_dict(outcomes_a),
-            "candidate": _outcome_to_dict(outcomes_b),
-            "improvements": comp.improvements,
-            "regressions": comp.regressions,
-            "unchanged": comp.unchanged,
-            "verdict": comp.verdict,
-        }, indent=2))
-    else:
-        # Show outcomes side by side, then comparison
-        print(f"# Baseline: {session_a['id'][:16]}... "
-              f"({session_a.get('grade', '?')})")
-        print(format_outcome_metrics(outcomes_a))
-        print()
-        print(f"# Candidate: {session_b['id'][:16]}... "
-              f"({session_b.get('grade', '?')})")
-        print(format_outcome_metrics(outcomes_b))
-        print()
-
-        comp = compare_outcomes(outcomes_a, outcomes_b)
-        print(format_comparison(comp))
-
-    db.close()
-
-
-def _outcome_to_dict(m) -> dict:
-    """Convert OutcomeMetrics to a plain dict for JSON output."""
-    return {
-        "error_retry_loops": m.error_retry_loops,
-        "files_reworked": m.files_reworked,
-        "rework_edits": m.rework_edits,
-        "ended_on_error": m.ended_on_error,
-        "final_error_streak": m.final_error_streak,
-        "total_tool_calls": m.total_tool_calls,
-        "total_errors": m.total_errors,
-        "success_rate": round(m.success_rate, 4),
-        "test_runs": m.test_runs,
-        "test_passes": m.test_passes,
-        "test_failures": m.test_failures,
-        "build_runs": m.build_runs,
-        "build_passes": m.build_passes,
-        "build_failures": m.build_failures,
-        "lint_runs": m.lint_runs,
-        "lint_passes": m.lint_passes,
-        "lint_failures": m.lint_failures,
-        "rework_files": m.rework_files,
-        "error_retry_details": m.error_retry_details,
-    }
-
-
-def cmd_replay(args) -> None:
-    """Replay a session step by step."""
-    db = _get_db(args)
-
-    if args.session_id:
-        session = db.get_session(args.session_id)
-    else:
-        sessions = db.list_sessions(limit=1)
-        if not sessions:
-            print("No sessions found. Run `sesh log` first.", file=sys.stderr)
-            sys.exit(3)
-        session = db.get_session(sessions[0]["id"])
-
-    if not session:
-        print(f"Session not found: {args.session_id or '(most recent)'}", file=sys.stderr)
-        sys.exit(4)
-
-    tool_calls = db.get_tool_calls(session["id"])
-
-    # Build timeline — prefer source JSONL for full fidelity (includes thinking blocks),
-    # fall back to DB-only (tool calls only, no thinking context)
-    source_path = session.get("source_path") if not args.db_only else None
-    steps, source = build_timeline(tool_calls, source_path=source_path)
-
-    if not steps:
-        print(f"No steps found for session {session['id'][:16]}...", file=sys.stderr)
-        db.close()
-        sys.exit(5)
-
-    # Annotate with patterns if requested
-    if args.annotate:
-        # Re-detect patterns from raw tool calls to get tool_indices
-        # (DB-stored patterns don't preserve index info)
-        tc_objects = [
-            ToolCall(
-                name=tc["name"],
-                tool_id=tc.get("tool_id", ""),
-                input_data=json.loads(tc["input_json"]) if isinstance(tc.get("input_json"), str) else tc.get("input_json", {}),
-                output_preview=tc.get("output_preview", ""),
-                output_length=tc.get("output_length", 0),
-                is_error=bool(tc.get("is_error", False)),
-                timestamp=tc.get("timestamp"),
-                categories=(tc.get("categories") or "").split(","),
-                seq=tc["seq"],
-            )
-            for tc in tool_calls
-        ]
-        patterns = redetect_patterns(tc_objects)
-        annotate_timeline(steps, patterns)
-
-    # Apply filters
-    step_range = None
-    if args.range:
-        try:
-            step_range = parse_range(args.range)
-        except ValueError as e:
-            print(f"Invalid range: {e}", file=sys.stderr)
-            sys.exit(2)
-
-    steps = filter_steps(
-        steps,
-        errors_only=args.errors,
-        tools_only=args.tools,
-        step_range=step_range,
-        tool_filter=args.tool,
-    )
-
-    if args.json:
-        data = []
-        for s in steps:
-            entry = {
-                "seq": s.seq,
-                "type": s.type,
-                "timestamp": s.timestamp,
-                "summary": s.summary,
-            }
-            if s.tool_name:
-                entry["tool_name"] = s.tool_name
-            if s.is_error:
-                entry["is_error"] = True
-            if s.annotations:
-                entry["annotations"] = s.annotations
-            if args.verbose and s.detail:
-                entry["detail"] = s.detail
-            data.append(entry)
-        print(json.dumps({
-            "session_id": session["id"],
-            "grade": session.get("grade"),
-            "source": source,
-            "steps": data,
-        }, indent=2))
-    else:
-        print(format_replay(
-            steps, session,
-            source=source,
-            compact=args.compact,
-            verbose=args.verbose,
-        ))
-
-    db.close()
-
-
-def cmd_debug(args) -> None:
-    """Debug a session — search thinking blocks to understand agent reasoning.
-
-    Four modes: thinking search (default), action reverse lookup (--action),
-    dotnotes path search (--dotnotes), pattern correlation (--correlate).
-    """
-    db = _get_db(args)
-
-    if args.session_id:
-        session = db.get_session(args.session_id)
-    else:
-        sessions = db.list_sessions(limit=1)
-        if not sessions:
-            print("No sessions found. Run `sesh log` first.", file=sys.stderr)
-            sys.exit(3)
-        session = db.get_session(sessions[0]["id"])
-
-    if not session:
-        print(f"Session not found: {args.session_id or '(most recent)'}", file=sys.stderr)
-        sys.exit(4)
-
-    source_path = session.get("source_path")
-    if not source_path or not Path(source_path).exists():
-        print(
-            f"Source file not found for session {session['id'][:16]}...\n"
-            "sesh debug requires the original JSONL (thinking blocks aren't stored in DB).",
-            file=sys.stderr,
-        )
-        db.close()
-        sys.exit(5)
-
-    tool_calls = db.get_tool_calls(session["id"])
-    steps, source = build_timeline(tool_calls, source_path=source_path)
-
-    if not steps:
-        print(f"No steps found for session {session['id'][:16]}...", file=sys.stderr)
-        db.close()
-        sys.exit(5)
-
-    dps = extract_decision_points(steps)
-
-    if not dps:
-        print(
-            f"No thinking blocks found in session {session['id'][:16]}...\n"
-            "This session may not have used extended thinking.",
-            file=sys.stderr,
-        )
-        db.close()
-        sys.exit(6)
-
-    # Mode dispatch: correlate, dotnotes, action lookup, or thinking search
-    query = args.query
-    if args.correlate:
-        # Correlate mode: map each antipattern to the thinking that caused it
-        tc_objects = _tool_calls_to_objects(tool_calls)
-        patterns_with_indices = redetect_patterns(tc_objects)
-
-        if not patterns_with_indices:
-            print("No antipatterns detected in this session.", file=sys.stderr)
-            db.close()
-            return
-
-        correlated = correlate_patterns(steps, dps, patterns_with_indices)
-
-        if args.json:
-            data = []
-            for pattern, matched_dps in correlated:
-                entry = {
-                    "pattern_type": pattern.type,
-                    "severity": pattern.severity,
-                    "detail": pattern.detail,
-                    "decision_points": [{
-                        "seq": dp.seq,
-                        "timestamp": dp.timestamp,
-                        "thinking_preview": dp.thinking.detail[:300],
-                    } for dp in matched_dps],
-                }
-                if args.verbose:
-                    for i, dp in enumerate(matched_dps):
-                        entry["decision_points"][i]["thinking_full"] = dp.thinking.detail
-                data.append(entry)
-            print(json.dumps({
-                "session_id": session["id"],
-                "mode": "correlate",
-                "total_patterns": len(patterns_with_indices),
-                "correlated_patterns": len(correlated),
-                "total_decision_points": len(dps),
-                "correlations": data,
-            }, indent=2))
-        else:
-            _print_correlate_results(session, dps, patterns_with_indices, correlated, verbose=args.verbose)
-        db.close()
-        return
-
-    # Dotnotes mode: index/search dot-notation paths
-    if args.dotnotes:
-        dn_results = search_dotnotes(dps, query or "")
-        if args.json:
-            # Group by path
-            by_path: dict[str, list] = {}
-            for path, dp in dn_results:
-                if path not in by_path:
-                    by_path[path] = []
-                entry = {
-                    "seq": dp.seq,
-                    "timestamp": dp.timestamp,
-                    "thinking_preview": dp.thinking.detail[:300],
-                    "action_count": len(dp.actions),
-                }
-                if args.verbose:
-                    entry["thinking_full"] = dp.thinking.detail
-                by_path[path].append(entry)
-            print(json.dumps({
-                "session_id": session["id"],
-                "pattern": query or "*",
-                "mode": "dotnotes",
-                "total_decision_points": len(dps),
-                "unique_paths": len(by_path),
-                "total_references": len(dn_results),
-                "dotnotes": by_path,
-            }, indent=2))
-        else:
-            _print_dotnotes_results(session, dps, dn_results, query, verbose=args.verbose)
-        db.close()
-        return
-
-    # Default mode: search thinking text, or reverse-lookup by action
-    if query and args.action:
-        results = lookup_by_action(dps, query)
-    elif query:
-        results = search_thinking(dps, query)
-    else:
-        results = dps
-
-    if args.json:
-        data = []
-        for dp in results:
-            entry = {
-                "seq": dp.seq,
-                "timestamp": dp.timestamp,
-                "thinking_length": len(dp.thinking.detail),
-                "thinking_preview": dp.thinking.detail[:300],
-                "action_count": len(dp.actions),
-                "actions": [
-                    {"tool_name": a.tool_name, "summary": a.summary, "is_error": a.is_error}
-                    for a in dp.actions
-                ],
-            }
-            if args.verbose:
-                entry["thinking_full"] = dp.thinking.detail
-            data.append(entry)
-        out = {
-            "session_id": session["id"],
-            "query": query,
-            "mode": "action" if args.action else "thinking",
-            "total_decision_points": len(dps),
-            "matches": len(results),
-            "decision_points": data,
-        }
-        print(json.dumps(out, indent=2))
-    else:
-        _print_debug_results(session, dps, results, query, verbose=args.verbose, action_mode=args.action)
-
-    db.close()
-
-
-def _print_debug_results(
-    session: dict,
-    all_dps: list,
-    results: list,
-    query: str | None,
-    verbose: bool = False,
-    action_mode: bool = False,
-) -> None:
-    """Format debug results as human-readable output."""
-    sid = session.get("id", "?")[:16]
-    grade = session.get("grade", "?")
-    model = session.get("model", "?")
-
-    print(f"{'=' * 60}")
-    mode_label = "Reverse Lookup" if action_mode else "Debug"
-    print(f"  {mode_label}: {sid}... ({grade}, {model or '?'})")
-    print(f"  {len(all_dps)} decision points in session")
-    if query and action_mode:
-        print(f"  Action: \"{query}\" → {len(results)} match(es)")
-    elif query:
-        print(f"  Query: \"{query}\" → {len(results)} match(es)")
-    print(f"{'=' * 60}")
-    print()
-
-    for dp in results:
-        thinking_preview = dp.thinking.detail
-        if not verbose:
-            thinking_preview = thinking_preview[:200]
-            if len(dp.thinking.detail) > 200:
-                thinking_preview += "..."
-
-        print(f"[DP {dp.seq}] {dp.timestamp or '?'}")
-        print(f"  THINKING ({len(dp.thinking.detail)} chars):")
-        for line in thinking_preview.split("\n"):
-            print(f"    {line}")
-
-        if dp.actions:
-            print(f"  ACTIONS ({len(dp.actions)}):")
-            for a in dp.actions:
-                status = "x" if a.is_error else "+"
-                # Highlight matching action in reverse lookup mode
-                marker = " ◀" if action_mode and query and query.lower() in a.summary.lower() else ""
-                print(f"    [{status}] {a.summary}{marker}")
-        else:
-            print("  ACTIONS: (none — session ended or next thinking began)")
-        print()
-
-    print(f"{'=' * 60}")
-    if query:
-        search_type = "action" if action_mode else "thinking"
-        print(f"  {len(results)}/{len(all_dps)} decision points match \"{query}\" ({search_type})")
-    else:
-        print(f"  {len(all_dps)} decision points total")
-    print(f"{'=' * 60}")
-
-
-def _print_dotnotes_results(
-    session: dict,
-    all_dps: list,
-    results: list[tuple[str, object]],
-    pattern: str | None,
-    verbose: bool = False,
-) -> None:
-    """Format dotnotes results as human-readable output."""
-    sid = session.get("id", "?")[:16]
-    grade = session.get("grade", "?")
-    model = session.get("model", "?")
-
-    # Group by path
-    by_path: dict[str, list] = {}
-    for path, dp in results:
-        if path not in by_path:
-            by_path[path] = []
-        by_path[path].append(dp)
-
-    print(f"{'=' * 60}")
-    print(f"  Dotnotes: {sid}... ({grade}, {model or '?'})")
-    print(f"  {len(all_dps)} decision points | {len(by_path)} unique paths | {len(results)} references")
-    if pattern:
-        print(f"  Pattern: \"{pattern}\"")
-    print(f"{'=' * 60}")
-    print()
-
-    for path, dps in sorted(by_path.items()):
-        print(f"  {path}  ({len(dps)} reference{'s' if len(dps) != 1 else ''})")
-        for dp in dps:
-            thinking_preview = dp.thinking.detail
-            if not verbose:
-                thinking_preview = thinking_preview[:120]
-                if len(dp.thinking.detail) > 120:
-                    thinking_preview += "..."
-            thinking_preview = " ".join(thinking_preview.split())
-            print(f"    [DP {dp.seq}] {thinking_preview}")
-        print()
-
-    print(f"{'=' * 60}")
-    print(f"  {len(by_path)} paths, {len(results)} total references")
-    print(f"{'=' * 60}")
-
-
-def _tool_calls_to_objects(tool_calls: list[dict]) -> list:
-    """Convert DB tool_call dicts back to ToolCall objects for pattern re-detection."""
-    from .parsers.base import ToolCall
-    result = []
-    for tc in tool_calls:
-        input_data = tc.get("input_json", "{}")
-        if isinstance(input_data, str):
-            try:
-                input_data = json.loads(input_data)
-            except json.JSONDecodeError:
-                input_data = {}
-        cats = tc.get("categories", "")
-        categories = cats.split(",") if cats else []
-        result.append(ToolCall(
-            name=tc["name"],
-            tool_id=tc.get("tool_id", ""),
-            input_data=input_data,
-            output_preview=tc.get("output_preview", ""),
-            output_length=tc.get("output_length", 0),
-            is_error=bool(tc.get("is_error", False)),
-            timestamp=tc.get("timestamp"),
-            categories=categories,
-            seq=tc.get("seq", 0),
-        ))
-    return result
-
-
-def _print_correlate_results(
-    session: dict,
-    all_dps: list,
-    all_patterns: list,
-    correlated: list[tuple],
-    verbose: bool = False,
-) -> None:
-    """Format pattern correlation results."""
-    sid = session.get("id", "?")[:16]
-    grade = session.get("grade", "?")
-    model = session.get("model", "?")
-
-    severity_icon = {"warning": "!!", "concern": "!", "info": "~"}
-
-    print(f"{'=' * 60}")
-    print(f"  Pattern Correlation: {sid}... ({grade}, {model or '?'})")
-    print(f"  {len(all_dps)} decision points | {len(all_patterns)} patterns | {len(correlated)} correlated")
-    print(f"{'=' * 60}")
-    print()
-
-    for pattern, matched_dps in correlated:
-        icon = severity_icon.get(pattern.severity, "~")
-        print(f"  [{icon}] {pattern.type} ({pattern.severity})")
-        print(f"      {pattern.detail}")
-        print(f"      Caused by {len(matched_dps)} decision point(s):")
-        for dp in matched_dps:
-            thinking_preview = dp.thinking.detail
-            if not verbose:
-                thinking_preview = thinking_preview[:150]
-                if len(dp.thinking.detail) > 150:
-                    thinking_preview += "..."
-            thinking_preview = " ".join(thinking_preview.split())
-            print(f"        [DP {dp.seq}] {thinking_preview}")
-        print()
-
-    # Show uncorrelated patterns (those without tool_indices)
-    correlated_types = {p.type for p, _ in correlated}
-    uncorrelated = [p for p in all_patterns if p.type not in correlated_types and not p.tool_indices]
-    if uncorrelated:
-        print("  Uncorrelated patterns (no specific tool calls):")
-        for p in uncorrelated:
-            icon = severity_icon.get(p.severity, "~")
-            print(f"    [{icon}] {p.type}: {p.detail}")
-        print()
-
-    print(f"{'=' * 60}")
-    print(f"  {len(correlated)}/{len(all_patterns)} patterns correlated to decision points")
-    print(f"{'=' * 60}")
-
-
-def cmd_watch(args) -> None:
-    """Watch directories for new sessions and auto-ingest.
-
-    Polls session directories for new JSONL files. Files must be
-    unchanged for --settle seconds before ingestion (avoids partial reads).
-    """
-    config = _get_config()
-    db = _get_db(args)
-
-    # Resolve directories: explicit args or auto-discover from ~/.claude/
-    directories = []
-    if args.dirs:
-        directories = [Path(d) for d in args.dirs]
-    else:
-        directories = discover_session_dirs()
-        if not directories:
-            print(
-                "No session directories found. Specify directories:\n"
-                "  sesh watch ~/.claude/projects/",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-    # Validate directories exist
-    for d in directories:
-        if not d.is_dir():
-            print(f"Warning: {d} is not a directory, skipping", file=sys.stderr)
-    directories = [d for d in directories if d.is_dir()]
-
-    if not directories:
-        print("Error: No valid directories to watch", file=sys.stderr)
-        sys.exit(1)
-
-    if args.once:
-        # One-shot scan
-        count = ingest_new_files(
-            db, config, directories,
-            settle_seconds=args.settle,
-            quiet=args.quiet,
-        )
-        if not args.quiet:
-            print(f"\nIngested {count} new session(s)")
-        db.close()
-    else:
-        try:
-            watch_loop(
-                db, config, directories,
-                interval=args.interval,
-                settle_seconds=args.settle,
-                quiet=args.quiet,
-            )
-        finally:
-            db.close()
-
-
-def cmd_analyze(args) -> None:
-    """One-command session analysis — no database required.
-
-    Point at a JSONL transcript, get: stats, grade, patterns,
-    failure points, remediations, and summary.
-    """
-    path = Path(args.file)
-    if not path.exists():
-        print(f"Error: File not found: {args.file}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        result = analyze_session(path)
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(2)
-
-    if args.json:
-        print(analysis_to_json(result, verbose=args.verbose))
-    elif args.fix:
-        patch = generate_claude_md_patch(result.remediations)
-        if patch:
-            print(patch)
-        else:
-            print("No CLAUDE.md changes recommended. Clean session.")
-    else:
-        print(format_analysis(result, verbose=args.verbose))
-
-
-def cmd_audit(args) -> None:
-    """Grade a repo's agent-readiness — no database required."""
-    path = Path(args.path) if args.path else Path.cwd()
-    if not path.exists() or not path.is_dir():
-        print(f"Error: Not a directory: {path}", file=sys.stderr)
-        sys.exit(1)
-
-    enabled = [args.metric] if args.metric else None
-    result = run_audit(path, enabled=enabled)
-
-    if args.json:
-        print(audit_to_json(result))
-    else:
-        print(format_audit_report(result))
-
-
 # --- CLI entry point and argument parsing ---
 
 
@@ -1033,7 +235,6 @@ def main() -> None:
 
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
-    # --- Subcommand definitions ---
     # --- Setup commands ---
     sub.add_parser("init", help="Initialize .sesh/ in current directory")
 
@@ -1049,48 +250,39 @@ def main() -> None:
     reflect_p.add_argument("session_id", nargs="?", help="Session ID (default: most recent)")
     reflect_p.add_argument("--json", action="store_true", help="Output as JSON")
 
-    # report
     report_p = sub.add_parser("report", help="Cross-session trend analysis")
     report_p.add_argument("--last", type=int, help="Number of sessions to analyze")
     report_p.add_argument("--json", action="store_true", help="Output as JSON")
 
-    # handoff
     handoff_p = sub.add_parser("handoff", help="Generate handoff summary")
     handoff_p.add_argument("session_id", nargs="?", help="Session ID (default: most recent)")
 
-    # search
     search_p = sub.add_parser("search", help="Full-text search across sessions")
     search_p.add_argument("query", help="Search query")
     search_p.add_argument("--limit", type=int, default=10, help="Max results")
     search_p.add_argument("--json", action="store_true", help="Output as JSON")
 
-    # list
     list_p = sub.add_parser("list", help="List logged sessions")
     list_p.add_argument("--last", type=int, help="Number of sessions to show")
     list_p.add_argument("--json", action="store_true", help="Output as JSON")
 
-    # stats
     stats_p = sub.add_parser("stats", help="Aggregate statistics dashboard")
     stats_p.add_argument("--json", action="store_true", help="Output as JSON")
 
-    # export
     export_p = sub.add_parser("export", help="Export session data as JSON")
     export_p.add_argument("session_id", help="Session ID to export")
 
-    # fix
     fix_p = sub.add_parser("fix", help="Generate remediation recommendations")
     fix_p.add_argument("session_id", nargs="?", help="Session ID (default: most recent)")
     fix_p.add_argument("--json", action="store_true", help="Output as JSON")
     fix_p.add_argument("--patch", action="store_true",
                        help="Output CLAUDE.md patch only (ready to paste)")
 
-    # test
     test_p = sub.add_parser("test", help="Compare outcome metrics between sessions")
     test_p.add_argument("session_a", nargs="?", help="Baseline session ID (default: second most recent)")
     test_p.add_argument("session_b", nargs="?", help="Candidate session ID (default: most recent)")
     test_p.add_argument("--json", action="store_true", help="Output as JSON")
 
-    # replay
     replay_p = sub.add_parser("replay", help="Step-by-step session replay")
     replay_p.add_argument("session_id", nargs="?", help="Session ID (default: most recent)")
     replay_p.add_argument("--errors", action="store_true", help="Show only error steps")
@@ -1103,7 +295,6 @@ def main() -> None:
     replay_p.add_argument("--db-only", action="store_true", help="Use DB data only (skip source file)")
     replay_p.add_argument("--json", action="store_true", help="Output as JSON")
 
-    # debug
     debug_p = sub.add_parser("debug", help="Search thinking blocks — why did the agent do that?")
     debug_p.add_argument("query", nargs="?", help="Search query (searches thinking blocks, or actions with --action)")
     debug_p.add_argument("session_id", nargs="?", help="Session ID (default: most recent)")
@@ -1122,7 +313,6 @@ def main() -> None:
     analyze_p.add_argument("--fix", action="store_true",
                            help="Output CLAUDE.md patch only (ready to paste)")
 
-    # audit
     audit_p = sub.add_parser("audit", help="Grade a repo's agent-readiness (0-100, A+ to F)")
     audit_p.add_argument("path", nargs="?", help="Path to repo (default: current directory)")
     audit_p.add_argument("--metric", help="Run only one metric (e.g. bootstrap, file_discipline)")
