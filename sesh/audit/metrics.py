@@ -287,12 +287,26 @@ def detect_validation_harness(repo_path: Path, config: dict) -> MetricResult:
 def detect_linting(repo_path: Path, config: dict) -> MetricResult:
     """Can the agent self-check quality?
 
-    Checks: ESLint (3pts), Ruff (3pts), Prettier (2pts), Pylint (2pts),
-    Biome (3pts). Max 10. Multiple tools stack.
+    Checks linters, formatters, type checkers, and pre-commit hooks.
+    Multiple tools stack, capped at 10.
+
+    JS/TS: ESLint (3), Prettier (2), Biome (3).
+    Python: Ruff (3), Pylint (2), mypy (3), pyright (3).
+    Any: pre-commit (2).
     """
     score = 0
     findings = []
     recs = []
+
+    pyproject = repo_path / "pyproject.toml"
+    pyproject_text = ""
+    if pyproject.exists():
+        try:
+            pyproject_text = pyproject.read_text(errors="replace")
+        except OSError:
+            pass
+
+    # --- JS/TS tools ---
 
     # ESLint
     eslint_files = [
@@ -303,24 +317,6 @@ def detect_linting(repo_path: Path, config: dict) -> MetricResult:
         score += 3
         findings.append(Finding("found", "ESLint config"))
 
-    # Ruff / Python linting
-    ruff_found = False
-    if (repo_path / "ruff.toml").exists() or (repo_path / ".ruff.toml").exists():
-        ruff_found = True
-    pyproject = repo_path / "pyproject.toml"
-    if not ruff_found and pyproject.exists():
-        try:
-            text = pyproject.read_text(errors="replace")
-            for line in text.splitlines():
-                if line.strip().startswith("[tool.ruff"):
-                    ruff_found = True
-                    break
-        except OSError:
-            pass
-    if ruff_found:
-        score += 3
-        findings.append(Finding("found", "Ruff config"))
-
     # Prettier
     prettier_files = [
         ".prettierrc", ".prettierrc.js", ".prettierrc.json",
@@ -330,31 +326,70 @@ def detect_linting(repo_path: Path, config: dict) -> MetricResult:
         score += 2
         findings.append(Finding("found", "Prettier config"))
 
-    # Pylint
-    pylint_found = False
-    if (repo_path / ".pylintrc").exists():
-        pylint_found = True
-    if not pylint_found and pyproject.exists():
-        try:
-            text = pyproject.read_text(errors="replace")
-            for line in text.splitlines():
-                if line.strip().startswith("[tool.pylint"):
-                    pylint_found = True
-                    break
-        except OSError:
-            pass
-    if pylint_found:
-        score += 2
-        findings.append(Finding("found", "Pylint config"))
-
     # Biome (replaces eslint+prettier for some projects)
     if (repo_path / "biome.json").exists() or (repo_path / "biome.jsonc").exists():
         score += 3
         findings.append(Finding("found", "Biome config"))
 
+    # --- Python tools ---
+
+    # Ruff
+    ruff_found = False
+    if (repo_path / "ruff.toml").exists() or (repo_path / ".ruff.toml").exists():
+        ruff_found = True
+    if not ruff_found and _pyproject_has_section(pyproject_text, "[tool.ruff"):
+        ruff_found = True
+    if ruff_found:
+        score += 3
+        findings.append(Finding("found", "Ruff config"))
+
+    # Pylint
+    pylint_found = (repo_path / ".pylintrc").exists()
+    if not pylint_found:
+        pylint_found = _pyproject_has_section(pyproject_text, "[tool.pylint")
+    if pylint_found:
+        score += 2
+        findings.append(Finding("found", "Pylint config"))
+
+    # mypy (type checking)
+    mypy_found = any(
+        (repo_path / f).exists() for f in ["mypy.ini", ".mypy.ini"]
+    )
+    if not mypy_found:
+        mypy_found = _pyproject_has_section(pyproject_text, "[tool.mypy")
+    if not mypy_found:
+        # setup.cfg [mypy] section
+        setup_cfg = repo_path / "setup.cfg"
+        if setup_cfg.exists():
+            try:
+                text = setup_cfg.read_text(errors="replace")
+                mypy_found = any(
+                    line.strip() == "[mypy]" for line in text.splitlines()
+                )
+            except OSError:
+                pass
+    if mypy_found:
+        score += 3
+        findings.append(Finding("found", "mypy config"))
+
+    # pyright
+    pyright_found = (repo_path / "pyrightconfig.json").exists()
+    if not pyright_found:
+        pyright_found = _pyproject_has_section(pyproject_text, "[tool.pyright")
+    if pyright_found:
+        score += 3
+        findings.append(Finding("found", "pyright config"))
+
+    # --- Cross-language tools ---
+
+    # pre-commit
+    if (repo_path / ".pre-commit-config.yaml").exists():
+        score += 2
+        findings.append(Finding("found", "pre-commit config"))
+
     if score == 0:
         findings.append(Finding("missing", "No linter/formatter configuration found"))
-        recs.append("Add linter config (.eslintrc, ruff.toml, .prettierrc, or biome.json)")
+        recs.append("Add linter config (ruff.toml, .eslintrc, biome.json, or mypy.ini)")
 
     return MetricResult(
         name="linting",
@@ -362,6 +397,13 @@ def detect_linting(repo_path: Path, config: dict) -> MetricResult:
         findings=findings,
         recommendations=recs,
     )
+
+
+def _pyproject_has_section(text: str, prefix: str) -> bool:
+    """Check if pyproject.toml text contains a TOML section starting with prefix."""
+    if not text:
+        return False
+    return any(line.strip().startswith(prefix) for line in text.splitlines())
 
 
 # ============================================================

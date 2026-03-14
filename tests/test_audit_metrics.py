@@ -146,6 +146,53 @@ class TestLinting:
         result = detect_linting(tmp_path, {})
         assert result.score >= 3
 
+    def test_mypy_ini(self, tmp_path):
+        (tmp_path / "mypy.ini").write_text("[mypy]\nstrict = true\n")
+        result = detect_linting(tmp_path, {})
+        assert result.score >= 3
+        assert any("mypy" in f.description for f in result.findings)
+
+    def test_mypy_in_pyproject(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text("[tool.mypy]\nstrict = true\n")
+        result = detect_linting(tmp_path, {})
+        assert result.score >= 3
+
+    def test_mypy_in_setup_cfg(self, tmp_path):
+        (tmp_path / "setup.cfg").write_text("[mypy]\nstrict = True\n")
+        result = detect_linting(tmp_path, {})
+        assert result.score >= 3
+
+    def test_pyright(self, tmp_path):
+        (tmp_path / "pyrightconfig.json").write_text('{"typeCheckingMode": "strict"}')
+        result = detect_linting(tmp_path, {})
+        assert result.score >= 3
+        assert any("pyright" in f.description for f in result.findings)
+
+    def test_pyright_in_pyproject(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text("[tool.pyright]\ntypeCheckingMode = 'strict'\n")
+        result = detect_linting(tmp_path, {})
+        assert result.score >= 3
+
+    def test_pre_commit(self, tmp_path):
+        (tmp_path / ".pre-commit-config.yaml").write_text("repos:\n  - repo: https://github.com/astral-sh/ruff-pre-commit\n")
+        result = detect_linting(tmp_path, {})
+        assert result.score >= 2
+        assert any("pre-commit" in f.description for f in result.findings)
+
+    def test_python_full_stack(self, tmp_path):
+        """Python project with ruff + mypy + pre-commit should score 8+."""
+        (tmp_path / "pyproject.toml").write_text("[tool.ruff]\nline-length = 100\n\n[tool.mypy]\nstrict = true\n")
+        (tmp_path / ".pre-commit-config.yaml").write_text("repos: []\n")
+        result = detect_linting(tmp_path, {})
+        assert result.score >= 8  # ruff(3) + mypy(3) + pre-commit(2)
+
+    def test_python_ruff_plus_mypy(self, tmp_path):
+        """ruff + mypy should score 6 — no longer capped at 5 for Python."""
+        (tmp_path / "ruff.toml").write_text("line-length = 100\n")
+        (tmp_path / "mypy.ini").write_text("[mypy]\nstrict = true\n")
+        result = detect_linting(tmp_path, {})
+        assert result.score >= 6
+
 
 # ============================================================
 # Codebase Map
