@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e .
-          pip install pytest ruff
+          pip install pytest ruff==0.15.5
 
       - name: Lint
         run: ruff check sesh/ tests/
