@@ -90,6 +90,44 @@ class TestTaskEntryPoints:
         result = detect_task_entry_points(tmp_path, {})
         assert result.score >= 3
 
+    def test_tox_ini(self, tmp_path):
+        (tmp_path / "tox.ini").write_text("[tox]\nenvlist = py310,py311\n")
+        result = detect_task_entry_points(tmp_path, {})
+        assert result.score >= 2
+        assert any("tox" in f.description for f in result.findings)
+
+    def test_tox_in_pyproject(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text("[tool.tox]\nlegacy_tox_ini = '[tox]'\n")
+        result = detect_task_entry_points(tmp_path, {})
+        assert result.score >= 2
+
+    def test_noxfile(self, tmp_path):
+        (tmp_path / "noxfile.py").write_text("import nox\n@nox.session\ndef tests(s): pass\n")
+        result = detect_task_entry_points(tmp_path, {})
+        assert result.score >= 2
+        assert any("noxfile" in f.description for f in result.findings)
+
+    def test_justfile(self, tmp_path):
+        (tmp_path / "justfile").write_text("build:\n  cargo build\n\ntest:\n  cargo test\n")
+        result = detect_task_entry_points(tmp_path, {})
+        assert result.score >= 3
+        assert any("justfile" in f.description for f in result.findings)
+
+    def test_taskfile_yml(self, tmp_path):
+        (tmp_path / "Taskfile.yml").write_text("version: '3'\ntasks:\n  build:\n    cmds: ['go build']\n")
+        result = detect_task_entry_points(tmp_path, {})
+        assert result.score >= 3
+
+    def test_python_full_stack(self, tmp_path):
+        """Python project with Makefile + pyproject scripts + tox should score 8+."""
+        (tmp_path / "pyproject.toml").write_text(
+            "[project]\nname='x'\n\n[project.scripts]\napp = 'app.cli:main'\n"
+        )
+        (tmp_path / "Makefile").write_text("test:\n\tpytest\n\nlint:\n\truff check .\n")
+        (tmp_path / "tox.ini").write_text("[tox]\nenvlist = py310\n")
+        result = detect_task_entry_points(tmp_path, {})
+        assert result.score >= 8  # pyproject(3) + makefile(3) + tox(2)
+
 
 # ============================================================
 # Validation Harness
@@ -246,6 +284,71 @@ class TestDocStructure:
         (tmp_path / "README.md").write_text("# Project\n" + "Detail\n" * 60)
         result = detect_doc_structure(tmp_path, {})
         assert result.score >= 7
+
+    def test_python_docstrings_counted(self, tmp_path):
+        """Docstrings should count toward documentation density for Python files."""
+        (tmp_path / "README.md").write_text("# Project\n" + "Detail\n" * 60)
+        # 20 lines total, 6 are docstring lines (30% density — well above 5%)
+        (tmp_path / "app.py").write_text(
+            '"""Module docstring."""\n'
+            "\n"
+            "def foo():\n"
+            '    """Do the thing.\n'
+            "\n"
+            '    With details.\n'
+            '    """\n'
+            "    return 1\n"
+            "\n"
+            "def bar():\n"
+            '    """Another function."""\n'
+            "    return 2\n"
+            "\n"
+            "class Baz:\n"
+            '    """A class.\n'
+            "\n"
+            '    Does stuff.\n'
+            '    """\n'
+            "    x = 1\n"
+            "    y = 2\n"
+        )
+        result = detect_doc_structure(tmp_path, {})
+        # Should get comment density points (docstrings counted)
+        density_findings = [f for f in result.findings if "density" in f.description.lower() or "comment" in f.description.lower()]
+        assert density_findings
+        # Should pass threshold (not "Low comment density")
+        assert not any("Low" in f.description for f in density_findings)
+
+    def test_hash_comments_still_counted(self, tmp_path):
+        """Regular # comments should still count for Python files."""
+        (tmp_path / "README.md").write_text("# Project\n" + "Detail\n" * 60)
+        # 10 lines, 5 are # comments (50% — well above threshold)
+        (tmp_path / "app.py").write_text(
+            "# Main module\n"
+            "# Handles core logic\n"
+            "import os\n"
+            "# Config\n"
+            "X = 1\n"
+            "# Constants\n"
+            "Y = 2\n"
+            "# End\n"
+            "def run():\n"
+            "    pass\n"
+        )
+        result = detect_doc_structure(tmp_path, {})
+        assert not any("Low" in f.description for f in result.findings if "density" in f.description.lower())
+
+    def test_js_comments_unchanged(self, tmp_path):
+        """JS/TS files should still use // and /* comment detection."""
+        (tmp_path / "README.md").write_text("# Project\n" + "Detail\n" * 60)
+        (tmp_path / "app.js").write_text(
+            "// Main module\n"
+            "/* Config block */\n"
+            "const x = 1;\n"
+            "const y = 2;\n"
+        )
+        result = detect_doc_structure(tmp_path, {})
+        density_findings = [f for f in result.findings if "density" in f.description.lower() or "comment" in f.description.lower()]
+        assert density_findings
 
 
 # ============================================================

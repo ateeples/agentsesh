@@ -110,12 +110,17 @@ def detect_bootstrap(repo_path: Path, config: dict) -> MetricResult:
 def detect_task_entry_points(repo_path: Path, config: dict) -> MetricResult:
     """Are build/test/lint/run discoverable?
 
-    Checks: package.json scripts (4pts), Makefile targets (3pts),
-    pyproject.toml scripts (3pts). Max 10.
+    Checks task runners across ecosystems. Multiple tools stack, capped at 10.
+
+    JS/TS: package.json scripts (4pts).
+    Python: pyproject.toml scripts (3pts), tox/nox (2pts).
+    Any: Makefile (3pts), justfile (3pts), Taskfile.yml (3pts).
     """
     score = 0
     findings = []
     recs = []
+
+    # --- JS/TS ---
 
     # package.json scripts
     pkg_json = repo_path / "package.json"
@@ -134,20 +139,7 @@ def detect_task_entry_points(repo_path: Path, config: dict) -> MetricResult:
         except (json_mod.JSONDecodeError, OSError):
             findings.append(Finding("warning", "package.json not parseable"))
 
-    # Makefile
-    makefile = repo_path / "Makefile"
-    if makefile.exists():
-        try:
-            lines = makefile.read_text(errors="replace").splitlines()
-            targets = [l for l in lines if re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*\s*:', l)]
-            if len(targets) >= 2:
-                score += 3
-                findings.append(Finding("found", f"Makefile: {len(targets)} targets"))
-            elif targets:
-                score += 1
-                findings.append(Finding("warning", f"Makefile: only {len(targets)} target"))
-        except OSError:
-            pass
+    # --- Python ---
 
     # pyproject.toml scripts
     pyproject = repo_path / "pyproject.toml"
@@ -167,8 +159,51 @@ def detect_task_entry_points(repo_path: Path, config: dict) -> MetricResult:
         except OSError:
             pass
 
+    # tox (Python test orchestration)
+    tox_found = (repo_path / "tox.ini").exists() or (repo_path / "tox.toml").exists()
+    if not tox_found and pyproject.exists():
+        tox_found = _pyproject_has_section(
+            pyproject.read_text(errors="replace") if pyproject.exists() else "",
+            "[tool.tox",
+        )
+    if tox_found:
+        score += 2
+        findings.append(Finding("found", "tox config"))
+
+    # nox (Python task runner)
+    if (repo_path / "noxfile.py").exists():
+        score += 2
+        findings.append(Finding("found", "noxfile.py"))
+
+    # --- Cross-language task runners ---
+
+    # Makefile
+    makefile = repo_path / "Makefile"
+    if makefile.exists():
+        try:
+            lines = makefile.read_text(errors="replace").splitlines()
+            targets = [l for l in lines if re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*\s*:', l)]
+            if len(targets) >= 2:
+                score += 3
+                findings.append(Finding("found", f"Makefile: {len(targets)} targets"))
+            elif targets:
+                score += 1
+                findings.append(Finding("warning", f"Makefile: only {len(targets)} target"))
+        except OSError:
+            pass
+
+    # justfile (modern Makefile alternative)
+    if (repo_path / "justfile").exists() or (repo_path / "Justfile").exists():
+        score += 3
+        findings.append(Finding("found", "justfile"))
+
+    # Taskfile.yml (go-task)
+    if (repo_path / "Taskfile.yml").exists() or (repo_path / "Taskfile.yaml").exists():
+        score += 3
+        findings.append(Finding("found", "Taskfile.yml (go-task)"))
+
     if score == 0:
-        recs.append("Add discoverable task entry points (npm scripts, Makefile, or pyproject.toml scripts)")
+        recs.append("Add discoverable task entry points (Makefile, pyproject.toml scripts, justfile, or npm scripts)")
 
     return MetricResult(
         name="task_entry_points",
@@ -514,7 +549,7 @@ def detect_doc_structure(repo_path: Path, config: dict) -> MetricResult:
         findings.append(Finding("missing", "No docs/ directory"))
         recs.append("Add docs/ directory for detailed documentation")
 
-    # Inline comment density
+    # Documentation density — comments + docstrings
     threshold = config.get("comment_threshold", 0.05)
     sample_limit = config.get("doc_sample_limit", 20)
     total_lines = 0
@@ -525,10 +560,7 @@ def detect_doc_structure(repo_path: Path, config: dict) -> MetricResult:
         try:
             lines = src.read_text(errors="replace").splitlines()
             total_lines += len(lines)
-            for line in lines:
-                stripped = line.strip()
-                if stripped.startswith("#") or stripped.startswith("//") or stripped.startswith("/*"):
-                    comment_lines += 1
+            comment_lines += _count_doc_lines(lines, src.suffix)
             sampled += 1
         except OSError:
             continue
@@ -734,6 +766,48 @@ def detect_file_discipline(repo_path: Path, config: dict) -> MetricResult:
 # ============================================================
 # Helpers
 # ============================================================
+
+
+def _count_doc_lines(lines: list[str], suffix: str) -> int:
+    """Count documentation lines: comments + docstrings.
+
+    For Python files, tracks triple-quote docstring blocks in addition
+    to # comments. For other languages, counts // and /* comments.
+    """
+    count = 0
+    in_docstring = False
+    docstring_delim = ""
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Python docstrings (triple-quoted strings)
+        if suffix == ".py":
+            if in_docstring:
+                count += 1
+                if docstring_delim in stripped:
+                    in_docstring = False
+                continue
+
+            for delim in ('"""', "'''"):
+                if stripped.startswith(delim):
+                    count += 1
+                    # Check if docstring opens and closes on same line
+                    # (e.g. """Single line docstring.""")
+                    rest = stripped[3:]
+                    if delim not in rest:
+                        in_docstring = True
+                        docstring_delim = delim
+                    break
+            else:
+                # Regular Python comment
+                if stripped.startswith("#"):
+                    count += 1
+        else:
+            if stripped.startswith("#") or stripped.startswith("//") or stripped.startswith("/*"):
+                count += 1
+
+    return count
 
 
 def _walk_source_files(repo_path: Path, limit: int = 200):
