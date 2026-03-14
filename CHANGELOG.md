@@ -2,6 +2,20 @@
 
 All notable changes to AgentSesh are documented here.
 
+## [0.10.0] - 2026-03-14
+
+### Added
+- `sesh analyze --feedback` — closed-loop improvement: writes session-specific findings to CLAUDE.md with replaceable markers. Agents see directives on next boot.
+- `sesh analyze` (no args) — auto-discovers most recent Claude Code session from `~/.claude/projects/`. Zero friction.
+- `sesh audit --threshold N` — exit code 1 if score below threshold. Designed for CI gates.
+- Audit: linting metric now detects mypy, pyright, and pre-commit (Python projects were capped at 5/10)
+- Audit: task_entry_points metric now detects tox, nox, justfile, and Taskfile.yml
+- Audit: doc_structure metric counts Python docstrings toward documentation density
+
+### Changed
+- Split `cli.py` (1173 lines) into `sesh/commands/` package — debug, replay, ingest, analysis modules
+- Refactored pyproject.toml parsing in audit metrics to avoid redundant reads
+
 ## [0.9.0] - 2026-03-14
 
 ### Added
