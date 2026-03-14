@@ -220,48 +220,126 @@ def cmd_export(args) -> None:
 # --- CLI banner ---
 
 
+def _session_status() -> tuple[str, str, str] | None:
+    """Try to read last session info from nearest .sesh/. Returns (grade, score, trend) or None."""
+    try:
+        sesh_dir = find_sesh_dir()
+        if not sesh_dir:
+            return None
+        db = Database(sesh_dir / "sesh.db")
+        sessions = db.list_sessions(limit=5)
+        if not sessions:
+            db.close()
+            return None
+        latest = sessions[0]
+        grade = latest.get("grade", "?")
+        score = latest.get("score", 0)
+        # Trend: compare last vs average of previous 4
+        if len(sessions) >= 2:
+            prev_scores = [s.get("score", 0) for s in sessions[1:] if s.get("score") is not None]
+            if prev_scores:
+                avg = sum(prev_scores) / len(prev_scores)
+                diff = score - avg
+                trend = "▲" if diff > 2 else "▼" if diff < -2 else "━"
+            else:
+                trend = " "
+        else:
+            trend = " "
+        db.close()
+        return grade, str(int(score)), trend
+    except Exception:
+        return None
+
+
+def _sparkline(values: list[int]) -> str:
+    """Render a sparkline from a list of values using block characters."""
+    if not values:
+        return ""
+    blocks = "▁▂▃▄▅▆▇█"
+    lo, hi = min(values), max(values)
+    spread = hi - lo if hi != lo else 1
+    return "".join(blocks[min(7, int((v - lo) / spread * 7))] for v in values)
+
+
+def _grade_color(grade: str, color: bool) -> str:
+    """Return ANSI color code for a letter grade."""
+    if not color:
+        return ""
+    colors = {
+        "A+": "\033[92m", "A": "\033[92m",  # bright green
+        "B": "\033[36m",   # cyan
+        "C": "\033[33m",   # yellow
+        "D": "\033[91m",   # bright red
+        "F": "\033[31m",   # red
+    }
+    return colors.get(grade, "\033[37m")
+
+
 def _print_banner() -> None:
     """Print styled CLI banner when no subcommand is given."""
-    color = sys.stdout.isatty()
+    c = sys.stdout.isatty()
 
-    # ANSI codes
-    BOLD = "\033[1m" if color else ""
-    DIM = "\033[2m" if color else ""
-    CYAN = "\033[36m" if color else ""
-    GREEN = "\033[32m" if color else ""
-    WHITE = "\033[97m" if color else ""
-    R = "\033[0m" if color else ""
+    # ANSI
+    B = "\033[1m" if c else ""      # bold
+    D = "\033[2m" if c else ""      # dim
+    IT = "\033[3m" if c else ""     # italic
+    CY = "\033[36m" if c else ""    # cyan
+    GN = "\033[32m" if c else ""    # green
+    W = "\033[97m" if c else ""     # white
+    GR = "\033[90m" if c else ""    # gray
+    R = "\033[0m" if c else ""      # reset
 
-    def cmd(name: str, desc: str, pad: int = 22) -> str:
-        return f"    {GREEN}{name:<{pad}}{R}{DIM}{desc}{R}"
+    # Try to show live status
+    status = _session_status()
+    status_suffix = ""
+    spark_line = ""
+    if status:
+        grade, score, trend = status
+        gc = _grade_color(grade, c)
+        trend_c = ("\033[92m" if trend == "▲" else "\033[91m" if trend == "▼" else D) if c else ""
+        status_suffix = f"  {gc}{B}{grade}{R} {D}{score}{R} {trend_c}{trend}{R}"
+
+        # Sparkline from recent sessions
+        try:
+            sesh_dir = find_sesh_dir()
+            if sesh_dir:
+                db = Database(sesh_dir / "sesh.db")
+                recent = db.list_sessions(limit=20)
+                scores = [s.get("score", 0) for s in reversed(recent) if s.get("score") is not None]
+                if len(scores) >= 3:
+                    spark_line = f"  {D}┗╸{R} {D}{_sparkline(scores)}{R}"
+                db.close()
+        except Exception:
+            pass
+
+    # Logo — box-drawing letterforms + inline status
+    logo = [
+        f"  {B}{CY}┏━┓┏━╸┏━┓╻ ╻{R}",
+        f"  {B}{CY}┗━┓┣╸ ┗━┓┣━┫{R}   {D}v{__version__}{R}{status_suffix}",
+        f"  {B}{CY}┗━┛┗━╸┗━┛╹ ╹{R}{spark_line}",
+    ]
+
+    # Commands
+    def row(cmd_name: str, desc: str) -> str:
+        return f"  {GN}{cmd_name:<20}{R} {D}{desc}{R}"
 
     lines = [
         "",
-        f"  {BOLD}{WHITE}sesh{R} {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━{R} {DIM}v{__version__}{R}",
+        *logo,
         "",
-        f"  {BOLD}{CYAN}Start here{R} {DIM}— no setup required:{R}",
-        cmd("analyze", "diagnose your last AI coding session"),
-        cmd("audit", "grade your repo's agent-readiness"),
+        f"  {B}{W}$ sesh analyze{R}       {IT}{D}diagnose your last session{R}",
+        f"  {B}{W}$ sesh audit{R}         {IT}{D}grade your repo's AI-readiness{R}",
         "",
-        f"  {BOLD}{CYAN}Track{R} {DIM}— session database:{R}",
-        cmd("init", "set up .sesh/ in current directory"),
-        cmd("watch --once", "auto-discover and ingest sessions"),
-        cmd("reflect", "analyze most recent session"),
-        cmd("report", "cross-session trends"),
-        cmd("replay", "step-by-step session playback"),
+        f"  {GR}{'─' * 44}{R}",
         "",
-        f"  {BOLD}{CYAN}Fix{R} {DIM}— close the loop:{R}",
-        cmd("analyze --feedback", "write findings to CLAUDE.md"),
-        cmd("fix --patch", "generate remediation patch"),
-        cmd("audit --threshold N", "CI gate for repo readiness"),
+        row("reflect", "analyze ingested session"),
+        row("report", "cross-session trends"),
+        row("replay", "step-by-step playback"),
+        row("fix --patch", "generate CLAUDE.md patch"),
+        row("search <query>", "full-text search"),
+        row("debug <query>", "search thinking blocks"),
         "",
-        f"  {BOLD}{CYAN}Explore{R}",
-        cmd("search <query>", "full-text search across sessions"),
-        cmd("debug <query>", "search agent thinking blocks"),
-        cmd("test", "compare outcomes between sessions"),
-        cmd("sesh-web", "browser dashboard"),
-        "",
-        f"  {DIM}sesh <command> --help for details{R}",
+        f"  {D}sesh <command> --help  {GR}│{R}  {D}sesh init  {GR}│{R}  {D}sesh watch{R}",
         "",
     ]
     print("\n".join(lines))
