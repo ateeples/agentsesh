@@ -186,6 +186,21 @@ def cmd_list(args) -> None:
     db.close()
 
 
+def cmd_tui(args) -> None:
+    """Launch interactive terminal dashboard."""
+    sesh_dir = find_sesh_dir()
+    if not sesh_dir:
+        print("No .sesh/ directory found. Run `sesh init` first.", file=sys.stderr)
+        sys.exit(1)
+
+    db = Database(sesh_dir / "sesh.db")
+    try:
+        from .tui import main as tui_main
+        tui_main(db)
+    finally:
+        db.close()
+
+
 def cmd_stats(args) -> None:
     """Show aggregate statistics."""
     db = _get_db(args)
@@ -449,6 +464,9 @@ def main() -> None:
     audit_p.add_argument("--threshold", type=int,
                          help="Minimum score to pass (exit 1 if below). For CI gates.")
 
+    # --- Interactive commands ---
+    sub.add_parser("tui", help="Terminal dashboard")
+
     # --- Background/daemon commands ---
     watch_p = sub.add_parser("watch", help="Auto-ingest new sessions from directories")
     watch_p.add_argument("dirs", nargs="*", help="Directories to watch (default: auto-discover)")
@@ -484,6 +502,7 @@ def main() -> None:
         "analyze": cmd_analyze,
         "audit": cmd_audit,
         "watch": cmd_watch,
+        "tui": cmd_tui,
     }
 
     cmd_func = commands.get(args.command)
