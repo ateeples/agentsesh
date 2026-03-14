@@ -81,6 +81,23 @@ class TestWriteWithoutRead:
         patterns = detect_write_without_read(calls)
         assert len(patterns) == 1
 
+    def test_write_then_edit_not_blind(self):
+        """Write creates a new file — editing it after is not blind."""
+        calls = [
+            _tc("Write", {"file_path": "/new.py"}, seq=0),
+            _tc("Edit", {"file_path": "/new.py"}, seq=1),
+        ]
+        assert detect_write_without_read(calls) == []
+
+    def test_write_does_not_cover_other_files(self):
+        """Writing /a.py does not make editing /b.py safe."""
+        calls = [
+            _tc("Write", {"file_path": "/a.py"}, seq=0),
+            _tc("Edit", {"file_path": "/b.py"}, seq=1),
+        ]
+        patterns = detect_write_without_read(calls)
+        assert len(patterns) == 1
+
 
 class TestErrorRate:
     def test_no_errors(self):
@@ -176,6 +193,36 @@ class TestBashOveruse:
     def test_below_threshold(self):
         calls = [_tc("Bash", {"command": "cat /a.py"}, seq=0)]
         assert detect_bash_overuse(calls) == []
+
+    def test_test_runner_piped_through_head_not_flagged(self):
+        """pytest | head is legitimate — don't flag the head/tail pipe."""
+        calls = [
+            _tc("Bash", {"command": "cd /proj && python3 -m pytest tests/ | head -50"}, seq=0),
+            _tc("Bash", {"command": "cd /proj && python3 -m pytest tests/ | tail -20"}, seq=1),
+            _tc("Bash", {"command": "cd /proj && python3 -m pytest tests/ | head -30"}, seq=2),
+        ]
+        assert detect_bash_overuse(calls) == []
+
+    def test_build_runner_piped_not_flagged(self):
+        """npm run build | tail is legitimate."""
+        calls = [
+            _tc("Bash", {"command": "npm run build 2>&1 | tail -20"}, seq=0),
+            _tc("Bash", {"command": "npm run build 2>&1 | head -50"}, seq=1),
+            _tc("Bash", {"command": "npm run build 2>&1 | tail -10"}, seq=2),
+        ]
+        assert detect_bash_overuse(calls) == []
+
+    def test_cat_still_flagged_alongside_runners(self):
+        """cat/grep anti-patterns still flagged even if runners are present."""
+        calls = [
+            _tc("Bash", {"command": "python3 -m pytest tests/ | head -50"}, seq=0),
+            _tc("Bash", {"command": "cat /a.py"}, seq=1),
+            _tc("Bash", {"command": "grep foo /b.py"}, seq=2),
+            _tc("Bash", {"command": "find . -name '*.py'"}, seq=3),
+        ]
+        patterns = detect_bash_overuse(calls)
+        assert len(patterns) == 1
+        assert "3/" in patterns[0].detail  # 3 out of 4 bash calls
 
 
 class TestWriteThenRead:

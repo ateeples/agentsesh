@@ -58,18 +58,26 @@ def detect_repeated_searches(
 def detect_write_without_read(
     tool_calls: list[ToolCall], thresholds: dict | None = None
 ) -> list[Pattern]:
-    """Detect edits to files that haven't been read in this session."""
-    files_read: set[str] = set()
+    """Detect edits to files that haven't been read or written in this session.
+
+    Files created with Write are treated as "known" — if you just wrote it,
+    you know what's in it. Only Edit on truly unread files is flagged.
+    """
+    files_known: set[str] = set()  # Read or Write = you know the contents
     blind_edits: list[int] = []
 
     for i, tc in enumerate(tool_calls):
         if tc.name == "Read":
             path = tc.input_data.get("file_path", "")
             if path:
-                files_read.add(path)
+                files_known.add(path)
+        elif tc.name == "Write":
+            path = tc.input_data.get("file_path", "")
+            if path:
+                files_known.add(path)
         elif tc.name == "Edit":
             path = tc.input_data.get("file_path", "")
-            if path and path not in files_read:
+            if path and path not in files_known:
                 blind_edits.append(i)
 
     if not blind_edits:
@@ -163,10 +171,29 @@ def detect_low_read_ratio(
     )]
 
 
+def _is_runner_command(cmd: str) -> bool:
+    """Check if a command is a test/build/lint runner (legitimate Bash use)."""
+    # Extract the primary command (before any pipe)
+    primary = cmd.split("|")[0].strip()
+    # Also handle && chains — check the last command in the chain
+    if "&&" in primary:
+        primary = primary.rsplit("&&", 1)[-1].strip()
+    from ..analyzers.outcomes import TEST_PATTERNS, BUILD_PATTERNS, LINT_PATTERNS
+    return bool(
+        TEST_PATTERNS.search(primary)
+        or BUILD_PATTERNS.search(primary)
+        or LINT_PATTERNS.search(primary)
+    )
+
+
 def detect_bash_overuse(
     tool_calls: list[ToolCall], thresholds: dict | None = None
 ) -> list[Pattern]:
-    """Detect Bash calls that should use dedicated tools."""
+    """Detect Bash calls that should use dedicated tools.
+
+    Piping test/build/lint output through head/tail is legitimate —
+    only flag when the primary command is cat/grep/find/sed.
+    """
     t = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
     bash_total = 0
     anti_indices: list[int] = []
@@ -175,6 +202,9 @@ def detect_bash_overuse(
         if tc.name == "Bash":
             bash_total += 1
             cmd = tc.input_data.get("command", "")
+            # Skip test/build/lint runners — piping through head/tail is fine
+            if _is_runner_command(cmd):
+                continue
             for anti in BASH_ANTI_PATTERNS:
                 if cmd.startswith(anti) or f" | {anti}" in cmd:
                     anti_indices.append(i)

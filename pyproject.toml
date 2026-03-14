@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentsesh"
-version = "0.4.0"
-description = "Agent session intelligence — behavioral analysis, grading, and handoff for AI agent sessions"
+version = "0.8.0"
+description = "Agent session intelligence — behavioral analysis, grading, remediation, replay, outcome testing, and prompt debugging for AI agent sessions"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"

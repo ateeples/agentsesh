@@ -156,3 +156,48 @@ class TestCLIRoundtrip:
         result = _run_sesh("log", "--dir", str(sessions_dir), cwd=tmp_path)
         assert result.returncode == 0
         assert "Ingested 3" in result.stdout
+
+
+class TestAnalyzeCLI:
+    """Tests for sesh analyze — no database required."""
+
+    def test_analyze_basic(self, tmp_path):
+        session_file = _make_session_file(tmp_path)
+        result = _run_sesh("analyze", str(session_file))
+        assert result.returncode == 0
+        assert "Session Analysis" in result.stdout
+        assert "Grade" in result.stdout
+
+    def test_analyze_json(self, tmp_path):
+        session_file = _make_session_file(tmp_path)
+        result = _run_sesh("analyze", str(session_file), "--json")
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert "session_id" in data
+        assert "grade" in data
+        assert "stats" in data
+
+    def test_analyze_verbose(self, tmp_path):
+        session_file = _make_session_file(tmp_path)
+        result = _run_sesh("analyze", str(session_file), "--verbose")
+        assert result.returncode == 0
+        assert "Session Analysis" in result.stdout
+
+    def test_analyze_fix(self, tmp_path):
+        session_file = _make_session_file(tmp_path)
+        result = _run_sesh("analyze", str(session_file), "--fix")
+        assert result.returncode == 0
+        # Either shows a patch or says no changes needed
+
+    def test_analyze_missing_file(self):
+        result = _run_sesh("analyze", "/nonexistent/file.jsonl")
+        assert result.returncode != 0
+        assert "not found" in result.stderr.lower() or "error" in result.stderr.lower()
+
+    def test_analyze_no_db_needed(self, tmp_path):
+        """analyze should work without any .sesh/ directory."""
+        session_file = _make_session_file(tmp_path)
+        # No sesh init — still works
+        result = _run_sesh("analyze", str(session_file))
+        assert result.returncode == 0
+        assert "Session Analysis" in result.stdout

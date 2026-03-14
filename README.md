@@ -1,14 +1,14 @@
 # sesh
 
-Agent session intelligence. Behavioral analysis, grading, and self-improvement for AI coding agents.
+Agent session intelligence. Behavioral analysis, grading, replay, and outcome testing for AI coding agents.
 
-sesh parses agent session transcripts, detects anti-patterns, grades sessions, and tracks trends over time. Built so agents can analyze themselves — and so humans can see what their agents are doing.
+sesh parses agent session transcripts, detects anti-patterns, grades sessions, replays sessions step by step, compares outcomes between sessions, and generates remediation patches. Built so agents can analyze themselves — and so humans can see what their agents are doing.
 
 ## Three interfaces, one engine
 
 | Interface | For | How |
 |-----------|-----|-----|
-| **CLI** | Developers in the terminal | `sesh reflect`, `sesh report`, `sesh search` |
+| **CLI** | Developers in the terminal | `sesh analyze`, `sesh reflect`, `sesh replay`, `sesh test`, `sesh fix` |
 | **MCP Server** | Agents at runtime | Add to your MCP config, agent calls `sesh_reflect` |
 | **Web Dashboard** | Humans who want observability | `sesh-web` → browser dashboard on localhost |
 
@@ -119,6 +119,88 @@ The dashboard shows:
 
 Auto-refreshes every 30 seconds — leave it open while your agent works.
 
+## One-command analysis
+
+Point `sesh analyze` at any Claude Code session transcript. No database, no setup.
+
+```bash
+# Full diagnostic
+sesh analyze ~/.claude/projects/my-project/session.jsonl
+
+# JSON output (for CI, dashboards, scripts)
+sesh analyze session.jsonl --json
+
+# Just the CLAUDE.md patch — paste it and go
+sesh analyze session.jsonl --fix
+
+# Include thinking context and grade breakdown
+sesh analyze session.jsonl -v
+```
+
+Output: duration, cost estimate, grade, failure points with timestamps, remediation recommendations, and effective time (how much of the session was productive before things went wrong).
+
+This is the fastest way to answer "what happened in that session?" — no `sesh init`, no database, no prior setup. Parse → analyze → report in one shot.
+
+## Session replay
+
+Reconstruct exactly what happened, step by step.
+
+```bash
+# Replay most recent session
+sesh replay
+
+# Replay with inline pattern annotations
+sesh replay --annotate
+
+# Show only errors — where did things go wrong?
+sesh replay --errors
+
+# Show only tool calls (no user/assistant text)
+sesh replay --tools
+
+# Zoom into a specific range
+sesh replay --range 15-30
+
+# Filter to specific tools
+sesh replay --tool Edit,Bash
+
+# Compact mode (no output previews)
+sesh replay --compact
+
+# Full output for every step
+sesh replay -v
+```
+
+Replay prefers the original JSONL source file for full fidelity (user messages, assistant text, thinking blocks, complete tool output). Falls back to the database if the source file is gone (tool calls only, 300-char output previews).
+
+## Outcome testing
+
+Compare what actually happened between sessions — not just process quality, but results.
+
+```bash
+# Compare two most recent sessions
+sesh test
+
+# Compare specific sessions
+sesh test <baseline_id> <candidate_id>
+```
+
+Measures: error-retry loops, files reworked, rework edits, terminal error state, success rate, test/build/lint pass rates. Verdict: improved, regressed, mixed, or unchanged.
+
+## Remediation
+
+Turn session analysis into actionable fixes.
+
+```bash
+# Full remediation report
+sesh fix
+
+# Output a CLAUDE.md patch (ready to paste)
+sesh fix --patch
+```
+
+Each anti-pattern maps to specific remediation actions and a CLAUDE.md snippet. `--patch` generates a combined patch you can paste directly into your agent's instruction file.
+
 ## What it detects
 
 sesh runs 9 pattern detectors on every session:
@@ -147,10 +229,14 @@ Sessions are scored 0–100 and graded A+ through F:
 ## CLI reference
 
 ```
+sesh analyze <file>          One-command diagnostic (no database required)
 sesh init                    Initialize .sesh/ in current directory
 sesh log <file>              Ingest a session transcript
 sesh log --dir <dir>         Batch ingest all transcripts in a directory
 sesh reflect [session_id]    Analyze a session (default: most recent)
+sesh replay [session_id]     Step-by-step session replay
+sesh test [a] [b]            Compare outcome metrics between sessions
+sesh fix [session_id]        Generate remediation recommendations
 sesh report [--last N]       Cross-session trend analysis
 sesh handoff [session_id]    Generate handoff document
 sesh search <query>          Full-text search
@@ -159,6 +245,23 @@ sesh stats                   Aggregate statistics
 sesh export <session_id>     Export session as JSON
 sesh watch [dirs...]         Auto-ingest new sessions (polls continuously)
 sesh watch --once [dirs...]  One-shot scan and ingest
+
+Replay flags:
+  --errors                   Show only error steps
+  --tools                    Show only tool calls
+  --range 5-15               Show specific step range
+  --tool Edit,Bash           Filter to specific tool(s)
+  --annotate                 Show inline pattern annotations
+  --compact                  No output previews
+  -v, --verbose              Show full output for each step
+  --db-only                  Skip source file, use DB only
+
+Analyze flags:
+  --fix                      Output CLAUDE.md patch only (ready to paste)
+  -v, --verbose              Include thinking context and grade breakdown
+
+Fix flags:
+  --patch                    Output CLAUDE.md patch only
 
 Watch flags:
   --interval N               Poll interval in seconds (default: 30)
