@@ -456,6 +456,8 @@ def main() -> None:
                            help="Output CLAUDE.md patch only (ready to paste)")
     analyze_p.add_argument("--feedback", nargs="?", const=True, default=None,
                            help="Write session feedback to CLAUDE.md (or specify target file)")
+    analyze_p.add_argument("--collab", action="store_true",
+                           help="Show detailed collaboration analysis (human-AI partnership grading)")
     analyze_p.add_argument("--profile", action="store_true",
                            help="Cross-session behavioral profile (analyzes all sessions in directory)")
     analyze_p.add_argument("--dir", help="Directory of transcripts for --profile (default: auto-detect)")

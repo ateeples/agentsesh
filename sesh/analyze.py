@@ -19,6 +19,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from .analyzers.collaboration import (
+    CollaborationAnalysis,
+    analyze_collaboration,
+    format_collaboration,
+)
 from .analyzers.grader import grade_session
 from .analyzers.outcome_grader import OutcomeNarrative, grade_outcome
 from .analyzers.outcomes import BUILD_PATTERNS, TEST_PATTERNS
@@ -106,6 +111,8 @@ class AnalysisResult:
     # Outcome-based analysis (v2)
     session_type: SessionClassification | None = None
     outcome: OutcomeNarrative | None = None
+    # Collaboration analysis (v3)
+    collaboration: CollaborationAnalysis | None = None
 
 
 # --- Core functions ---
@@ -443,6 +450,9 @@ def analyze_session(path: str | Path) -> AnalysisResult:
     session_classification = classify_session(session.tool_calls)
     outcome_narrative = grade_outcome(session.tool_calls, session_classification)
 
+    # 13. Collaboration analysis (v3)
+    collab = analyze_collaboration(path, session.tool_calls)
+
     return AnalysisResult(
         session_id=session.session_id,
         source_path=str(path),
@@ -457,6 +467,7 @@ def analyze_session(path: str | Path) -> AnalysisResult:
         decision_points=decision_points,
         session_type=session_classification,
         outcome=outcome_narrative,
+        collaboration=collab,
     )
 
 
@@ -564,6 +575,12 @@ def format_analysis(
         )
         lines.append("")
 
+    # === Collaboration section ===
+    if result.collaboration and result.collaboration.human_turns > 0:
+        lines.append("")
+        lines.append(format_collaboration(result.collaboration))
+        lines.append("")
+
     # === Process details (verbose only) ===
     if verbose:
         if result.failure_points:
@@ -614,6 +631,7 @@ def format_analysis(
         next_steps = []
         if result.outcome.concerns or result.outcome.stuck_events:
             next_steps.append("sesh analyze --fix      Generate CLAUDE.md patch from this session")
+        next_steps.append("sesh analyze --collab    See how your collaboration style affects outcomes")
         next_steps.append("sesh analyze --profile  See patterns across all your sessions")
         if not verbose:
             next_steps.append("sesh analyze -v         Show process details")
@@ -685,6 +703,22 @@ def analysis_to_json(
         ],
         "summary": result.summary,
         "effective_minutes": result.effective_minutes,
+        "collaboration": {
+            "score": result.collaboration.score,
+            "grade": result.collaboration.grade,
+            "archetype": result.collaboration.archetype,
+            "human_turns": result.collaboration.human_turns,
+            "avg_words_per_turn": result.collaboration.avg_words_per_turn,
+            "corrections": result.collaboration.corrections,
+            "affirmations": result.collaboration.affirmations,
+            "delegations": result.collaboration.delegations,
+            "tc_per_turn": result.collaboration.tc_per_turn,
+            "arc": {
+                "opening": result.collaboration.arc.opening_style,
+                "closing": result.collaboration.arc.closing_style,
+                "length_trend": result.collaboration.arc.length_trend,
+            },
+        } if result.collaboration and result.collaboration.human_turns > 0 else None,
         "grade_breakdown": {
             "deductions": result.grade.deductions,
             "bonuses": result.grade.bonuses,
