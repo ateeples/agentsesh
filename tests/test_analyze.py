@@ -23,6 +23,7 @@ from sesh.analyze import (
     generate_summary,
     identify_failure_points,
 )
+from sesh.analyzers.outcome_grader import OutcomeNarrative
 from sesh.parsers.base import Pattern, SessionGrade, ToolCall
 
 # --- Fixtures ---
@@ -475,11 +476,27 @@ class TestFormatAnalysis:
         assert "10" in output  # duration
         assert "20" in output  # tool calls
 
-    def test_grade_shown(self):
+    def test_nonbuild_shows_session_type(self):
+        """Non-build sessions show session type label, not process grade."""
         result = self._make_result(grade="B", score=80)
         output = format_analysis(result)
-        assert "B" in output
-        assert "80" in output
+        # Should NOT show process grade as primary for non-build
+        assert "Grade: B" not in output
+        # Should show session type
+        assert "Session type:" in output
+        # Should nudge toward --profile
+        assert "--profile" in output
+
+    def test_build_shows_outcome_grade(self):
+        """Build sessions show outcome grade as primary."""
+        result = self._make_result(grade="B", score=80)
+        result.outcome = OutcomeNarrative(
+            session_type="BUILD", score=75, grade="B",
+            strengths=["3 commits"], concerns=[],
+        )
+        output = format_analysis(result)
+        assert "Outcome: B (75/100)" in output
+        assert "Process: B (80/100)" in output
 
     def test_cost_shown(self):
         result = self._make_result()

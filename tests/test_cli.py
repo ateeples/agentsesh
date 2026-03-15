@@ -177,7 +177,8 @@ class TestAnalyzeCLI:
         result = _run_sesh("analyze", str(session_file))
         assert result.returncode == 0
         assert "Session Analysis" in result.stdout
-        assert "Grade" in result.stdout
+        # Non-build sessions show session type, build sessions show outcome grade
+        assert "Session type:" in result.stdout or "Outcome:" in result.stdout
 
     def test_analyze_json(self, tmp_path):
         session_file = _make_session_file(tmp_path)

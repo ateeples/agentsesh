@@ -501,9 +501,15 @@ def format_analysis(
         )
         lines.append(f"Session type: {result.outcome.session_type}")
     else:
-        lines.append(f"Grade: {result.grade.grade} ({result.grade.score}/100)")
-        if result.session_type:
-            lines.append(f"Session type: {result.session_type.session_type}")
+        stype = result.session_type.session_type if result.session_type else "unknown"
+        stype_labels = {
+            "CONVERSATION": "Conversation (not a build — no outcome score)",
+            "RESEARCH": "Research (not a build — no outcome score)",
+            "MINIMAL": "Minimal session (too short to score)",
+            "WORKSPACE": "Workspace setup (not a build — no outcome score)",
+        }
+        label = stype_labels.get(stype, f"{stype}")
+        lines.append(f"Session type: {label}")
     lines.append("")
 
     # === Outcome section (primary) ===
@@ -544,11 +550,18 @@ def format_analysis(
                 )
             lines.append("")
     else:
-        # Non-build session — show basic summary
+        # Non-build session — show basic summary without process grades
         lines.append("What Happened")
         lines.append("\u2500" * 13)
         for line in result.summary:
             lines.append(line)
+        lines.append("")
+        lines.append(
+            "This session wasn't a build, so outcome scoring doesn't apply."
+        )
+        lines.append(
+            "To see patterns across all sessions:  sesh analyze --profile"
+        )
         lines.append("")
 
     # === Process details (verbose only) ===
@@ -594,6 +607,21 @@ def format_analysis(
             lines.append(f"  {d}")
         for b in result.grade.bonuses:
             lines.append(f"  {b}")
+
+    # Next steps — always shown for build sessions
+    if result.outcome and result.outcome.score is not None:
+        lines.append("")
+        next_steps = []
+        if result.outcome.concerns or result.outcome.stuck_events:
+            next_steps.append("sesh analyze --fix      Generate CLAUDE.md patch from this session")
+        next_steps.append("sesh analyze --profile  See patterns across all your sessions")
+        if not verbose:
+            next_steps.append("sesh analyze -v         Show process details")
+        if next_steps:
+            lines.append("Next steps")
+            lines.append("\u2500" * 10)
+            for step in next_steps:
+                lines.append(f"  {step}")
 
     return "\n".join(lines)
 
