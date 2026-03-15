@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..parsers.base import ToolCall
+from .collaboration import CollaborationAnalysis, analyze_collaboration
 from .outcome_grader import (
     OutcomeNarrative,
     StuckEvent,
@@ -84,15 +85,30 @@ class BehavioralProfile:
     recent_avg_score: float = 0.0
     trend: str = ""  # "improving", "stable", "declining"
 
+    # Collaboration (cross-session)
+    avg_collab_score: float = 0.0
+    collab_grade_distribution: dict[str, int] = field(default_factory=dict)
+    archetype_distribution: dict[str, int] = field(default_factory=dict)
+    dominant_archetype: str = ""
+    collab_trend: str = ""  # "improving", "stable", "declining"
+    early_collab_score: float = 0.0
+    recent_collab_score: float = 0.0
+    avg_correction_rate: float = 0.0
+    avg_affirmation_rate: float = 0.0
+    avg_words_per_turn: float = 0.0
+
 
 def build_profile(
     sessions: list[tuple[list[ToolCall], str]],
+    paths: list[Path] | None = None,
 ) -> BehavioralProfile:
     """Build a behavioral profile from multiple sessions.
 
     Args:
         sessions: List of (tool_calls, session_id) tuples,
                   ordered chronologically (oldest first).
+        paths: Optional list of JSONL paths, parallel to sessions.
+               When provided, collaboration analysis is included.
 
     Returns:
         BehavioralProfile with cross-session analysis.
@@ -113,7 +129,12 @@ def build_profile(
     test_ended_green_count = 0
     test_ended_red_count = 0
 
-    for tool_calls, session_id in sessions:
+    # Collaboration per-session data
+    collab_scores: list[int] = []
+    correction_rates: list[float] = []
+    affirmation_rates: list[float] = []
+    words_per_turn_all: list[float] = []
+    for idx, (tool_calls, session_id) in enumerate(sessions):
         if len(tool_calls) < 10:
             continue
 
@@ -161,6 +182,25 @@ def build_profile(
             profile.outcome_grades[outcome.grade] = (
                 profile.outcome_grades.get(outcome.grade, 0) + 1
             )
+
+        # Collaboration analysis (if paths provided)
+        if paths and idx < len(paths):
+            try:
+                collab = analyze_collaboration(paths[idx], tool_calls)
+                if collab.human_turns >= 2 and collab.score is not None:
+                    collab_scores.append(collab.score)
+                    profile.collab_grade_distribution[collab.grade] = (
+                        profile.collab_grade_distribution.get(collab.grade, 0) + 1
+                    )
+                    if collab.archetype:
+                        profile.archetype_distribution[collab.archetype] = (
+                            profile.archetype_distribution.get(collab.archetype, 0) + 1
+                        )
+                    correction_rates.append(collab.correction_rate)
+                    affirmation_rates.append(collab.affirmation_rate)
+                    words_per_turn_all.append(collab.avg_words_per_turn)
+            except Exception:
+                pass  # Skip sessions with collaboration parse errors
 
     # === Aggregate metrics ===
 
@@ -273,6 +313,50 @@ def build_profile(
                 profile.trend = "declining"
             else:
                 profile.trend = "stable"
+
+    # === Collaboration aggregation ===
+    if collab_scores:
+        profile.avg_collab_score = round(
+            sum(collab_scores) / len(collab_scores), 1
+        )
+
+        # Dominant archetype
+        if profile.archetype_distribution:
+            profile.dominant_archetype = max(
+                profile.archetype_distribution,
+                key=profile.archetype_distribution.get,
+            )
+
+        # Collaboration trend: first third vs last third
+        collab_third = len(collab_scores) // 3
+        if collab_third >= 3:
+            profile.early_collab_score = round(
+                sum(collab_scores[:collab_third]) / collab_third, 1
+            )
+            profile.recent_collab_score = round(
+                sum(collab_scores[-collab_third:]) / collab_third, 1
+            )
+            collab_diff = profile.recent_collab_score - profile.early_collab_score
+            if collab_diff > 5:
+                profile.collab_trend = "improving"
+            elif collab_diff < -5:
+                profile.collab_trend = "declining"
+            else:
+                profile.collab_trend = "stable"
+
+        # Average rates
+        if correction_rates:
+            profile.avg_correction_rate = round(
+                sum(correction_rates) / len(correction_rates), 3
+            )
+        if affirmation_rates:
+            profile.avg_affirmation_rate = round(
+                sum(affirmation_rates) / len(affirmation_rates), 3
+            )
+        if words_per_turn_all:
+            profile.avg_words_per_turn = round(
+                sum(words_per_turn_all) / len(words_per_turn_all), 1
+            )
 
     return profile
 
@@ -398,6 +482,50 @@ def format_profile(profile: BehavioralProfile) -> str:
             f"early avg {profile.early_avg_score} → "
             f"recent avg {profile.recent_avg_score}"
         )
+
+    # Collaboration
+    if profile.avg_collab_score > 0:
+        lines.append("")
+        lines.append("Collaboration")
+        lines.append("\u2500" * 13)
+        lines.append(f"  Average score: {profile.avg_collab_score}")
+
+        # Archetype distribution
+        if profile.archetype_distribution:
+            lines.append("")
+            total_arch = sum(profile.archetype_distribution.values())
+            for archetype, count in sorted(
+                profile.archetype_distribution.items(),
+                key=lambda x: x[1],
+                reverse=True,
+            ):
+                pct = count / max(total_arch, 1) * 100
+                marker = " \u2190 dominant" if archetype == profile.dominant_archetype else ""
+                lines.append(
+                    f"  {archetype:22s} {count:3d} ({pct:.0f}%){marker}"
+                )
+
+        # Collaboration metrics
+        if profile.avg_correction_rate > 0 or profile.avg_affirmation_rate > 0:
+            lines.append("")
+            lines.append(
+                f"  Avg correction rate: {profile.avg_correction_rate:.0%}"
+                f"  |  Avg affirmation rate: {profile.avg_affirmation_rate:.0%}"
+            )
+        if profile.avg_words_per_turn > 0:
+            lines.append(f"  Avg words/turn: {profile.avg_words_per_turn:.0f}")
+
+        # Collaboration trend
+        if profile.collab_trend:
+            arrow = {"improving": "\u2191", "declining": "\u2193", "stable": "\u2192"}.get(
+                profile.collab_trend, ""
+            )
+            lines.append("")
+            lines.append(
+                f"  {arrow} {profile.collab_trend.title()}: "
+                f"early avg {profile.early_collab_score} → "
+                f"recent avg {profile.recent_collab_score}"
+            )
 
     lines.append("")
     return "\n".join(lines)

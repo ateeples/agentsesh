@@ -171,6 +171,81 @@ def generate_profile_remediations(
             ),
         ))
 
+    # === Collaboration remediations ===
+
+    # 7. Spec Dump dominant archetype
+    if profile.dominant_archetype == "The Spec Dump":
+        spec_count = profile.archetype_distribution.get("The Spec Dump", 0)
+        total_arch = sum(profile.archetype_distribution.values())
+        rems.append(ProfileRemediation(
+            title="Spec Dump collaboration pattern",
+            severity="critical",
+            evidence=(
+                f"{spec_count}/{total_arch} sessions classified as The Spec Dump. "
+                f"Average words/turn: {profile.avg_words_per_turn:.0f}. "
+                "This pattern ships at 7% — 6x worse than Partnership."
+            ),
+            action=(
+                "Shorter prompts, more turns. Instead of one long spec, "
+                "give a 2-sentence direction, then correct and guide as the AI works. "
+                "Sessions where prompts shorten over time ship 6x more."
+            ),
+        ))
+
+    # 8. Autopilot dominant archetype
+    elif profile.dominant_archetype == "The Autopilot":
+        auto_count = profile.archetype_distribution.get("The Autopilot", 0)
+        total_arch = sum(profile.archetype_distribution.values())
+        rems.append(ProfileRemediation(
+            title="Autopilot collaboration pattern",
+            severity="recommended",
+            evidence=(
+                f"{auto_count}/{total_arch} sessions classified as The Autopilot. "
+                f"Avg correction rate: {profile.avg_correction_rate:.0%}, "
+                f"avg affirmation rate: {profile.avg_affirmation_rate:.0%}. "
+                "You're giving direction then disappearing."
+            ),
+            action=(
+                "Stay more engaged. Check in after each logical unit. "
+                "A quick 'yes, keep going' or 'no, try X instead' moves "
+                "sessions from Autopilot (35% ship) to Partnership (43% ship)."
+            ),
+        ))
+
+    # 9. Micromanager dominant archetype
+    elif profile.dominant_archetype == "The Micromanager":
+        micro_count = profile.archetype_distribution.get("The Micromanager", 0)
+        total_arch = sum(profile.archetype_distribution.values())
+        rems.append(ProfileRemediation(
+            title="Micromanager collaboration pattern",
+            severity="recommended",
+            evidence=(
+                f"{micro_count}/{total_arch} sessions classified as The Micromanager. "
+                "You're checking every 1-2 tool calls, preventing momentum."
+            ),
+            action=(
+                "Give the AI more room to work. Delegate a complete subtask "
+                "and review the result instead of checking every step. "
+                "Both Partnership and Struggle ship 6x more than Micromanager."
+            ),
+        ))
+
+    # 10. Declining collaboration trend
+    if profile.collab_trend == "declining":
+        rems.append(ProfileRemediation(
+            title="Declining collaboration quality",
+            severity="recommended",
+            evidence=(
+                f"Collaboration score dropped from {profile.early_collab_score} "
+                f"to {profile.recent_collab_score} over time."
+            ),
+            action=(
+                "Your recent sessions show less engagement. Consider: "
+                "are you giving less feedback? Shorter corrections and "
+                "affirmations keep collaboration quality high."
+            ),
+        ))
+
     return rems
 
 

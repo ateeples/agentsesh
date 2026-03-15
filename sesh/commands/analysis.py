@@ -322,12 +322,14 @@ def _run_profile(args) -> None:
     print(f"Analyzing {len(transcripts)} sessions from {session_dir}...", file=sys.stderr)
 
     sessions = []
+    session_paths = []
     errors = 0
     for path in transcripts:
         try:
             session = parse_transcript(path)
             if session.tool_calls:
                 sessions.append((session.tool_calls, session.session_id))
+                session_paths.append(path)
         except (ValueError, Exception):
             errors += 1
 
@@ -338,7 +340,7 @@ def _run_profile(args) -> None:
     if errors > 0:
         print(f"  ({errors} files skipped due to parse errors)", file=sys.stderr)
 
-    profile = build_profile(sessions)
+    profile = build_profile(sessions, paths=session_paths)
     print(format_profile(profile))
 
     # Generate and display cross-session recommendations
