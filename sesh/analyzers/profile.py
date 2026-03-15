@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..parsers.base import ToolCall
-from .collaboration import CollaborationAnalysis, analyze_collaboration
+from .collaboration import analyze_collaboration
 from .outcome_grader import (
     OutcomeNarrative,
     StuckEvent,
