@@ -159,6 +159,7 @@ class ClaudeCodeParser(BaseParser):
                                 rc_text = _extract_text_from_content(rc)
                                 tool_results[tool_id] = {
                                     "content_preview": rc_text[:300],
+                                    "content_tail": rc_text[-300:] if len(rc_text) > 300 else "",
                                     "is_error": _is_tool_error(is_err_flag, rc_text),
                                     "full_length": len(rc_text),
                                 }
@@ -190,6 +191,7 @@ class ClaudeCodeParser(BaseParser):
                 timestamp=tu["timestamp"],
                 categories=classify_tool(tu["name"]),
                 seq=seq,
+                output_tail=result.get("content_tail", ""),
             )
             tool_calls.append(tc)
 

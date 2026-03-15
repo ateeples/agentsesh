@@ -17,6 +17,7 @@ class ToolCall:
     timestamp: str | None = None
     categories: list[str] = field(default_factory=list)
     seq: int = 0  # Order within session
+    output_tail: str = ""  # Last 300 chars of output (test summaries live here)
 
 
 @dataclass

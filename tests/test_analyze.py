@@ -486,13 +486,13 @@ class TestFormatAnalysis:
         output = format_analysis(result)
         assert "$0.50" in output
 
-    def test_failure_points_section(self):
+    def test_failure_points_in_verbose(self):
         result = self._make_result(fps=[
             FailurePoint(seq=5, category="blind_edit",
                          description="Edited auth.py without reading"),
         ])
-        output = format_analysis(result)
-        assert "Failure" in output
+        output = format_analysis(result, verbose=True)
+        assert "Process Details" in output
         assert "blind" in output.lower() or "auth.py" in output
 
     def test_effective_time_shown(self):
@@ -500,7 +500,7 @@ class TestFormatAnalysis:
         output = format_analysis(result)
         assert "Effective" in output or "effective" in output
 
-    def test_what_to_fix_section_when_remediations(self):
+    def test_remediations_in_verbose(self):
         from sesh.analyzers.remediation import Remediation
         result = self._make_result()
         result.remediations = [
@@ -513,8 +513,8 @@ class TestFormatAnalysis:
                 impact="Eliminates blind edits.",
             ),
         ]
-        output = format_analysis(result)
-        assert "Fix" in output or "fix" in output
+        output = format_analysis(result, verbose=True)
+        assert "Remediation" in output or "Process" in output
         assert "Read before writing" in output
 
 

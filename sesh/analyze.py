@@ -20,12 +20,14 @@ from datetime import datetime
 from pathlib import Path
 
 from .analyzers.grader import grade_session
+from .analyzers.outcome_grader import OutcomeNarrative, grade_outcome
 from .analyzers.outcomes import BUILD_PATTERNS, TEST_PATTERNS
 from .analyzers.patterns import detect_all_patterns
 from .analyzers.remediation import (
     Remediation,
     get_all_remediations,
 )
+from .analyzers.session_type import SessionClassification, classify_session
 from .debug import DecisionPoint, extract_decision_points
 from .parsers import parse_transcript
 from .parsers.base import Pattern, SessionGrade, ToolCall
@@ -101,6 +103,9 @@ class AnalysisResult:
     effective_minutes: float | None = None
     timeline: list[ReplayStep] = field(default_factory=list)
     decision_points: list[DecisionPoint] = field(default_factory=list)
+    # Outcome-based analysis (v2)
+    session_type: SessionClassification | None = None
+    outcome: OutcomeNarrative | None = None
 
 
 # --- Core functions ---
@@ -434,6 +439,10 @@ def analyze_session(path: str | Path) -> AnalysisResult:
     # 11. Calculate effective time
     effective = calculate_effective_time(stats, failure_points)
 
+    # 12. Outcome-based analysis (v2)
+    session_classification = classify_session(session.tool_calls)
+    outcome_narrative = grade_outcome(session.tool_calls, session_classification)
+
     return AnalysisResult(
         session_id=session.session_id,
         source_path=str(path),
@@ -446,6 +455,8 @@ def analyze_session(path: str | Path) -> AnalysisResult:
         effective_minutes=effective,
         timeline=timeline,
         decision_points=decision_points,
+        session_type=session_classification,
+        outcome=outcome_narrative,
     )
 
 
@@ -482,43 +493,88 @@ def format_analysis(
         )
     lines.append(" | ".join(parts))
 
-    # Grade
-    lines.append(f"Grade: {result.grade.grade} ({result.grade.score}/100)")
+    # Grade — show outcome grade as primary, process grade as secondary
+    if result.outcome and result.outcome.score is not None:
+        lines.append(
+            f"Outcome: {result.outcome.grade} ({result.outcome.score}/100)"
+            f"  |  Process: {result.grade.grade} ({result.grade.score}/100)"
+        )
+        lines.append(f"Session type: {result.outcome.session_type}")
+    else:
+        lines.append(f"Grade: {result.grade.grade} ({result.grade.score}/100)")
+        if result.session_type:
+            lines.append(f"Session type: {result.session_type.session_type}")
     lines.append("")
 
-    # What Happened
-    lines.append("What Happened")
-    lines.append("\u2500" * 13)
-    for line in result.summary:
-        lines.append(line)
-    lines.append("")
-
-    # Failure Points
-    if result.failure_points:
-        lines.append("Failure Points")
-        lines.append("\u2500" * 14)
-        for i, fp in enumerate(result.failure_points, 1):
-            loc = f"min {fp.minute:.0f}" if fp.minute is not None else f"step {fp.seq}"
-            lines.append(f"{i}. [{loc}] {_failure_label(fp.category)}")
-            lines.append(f"   {fp.description}")
-            if fp.thinking_context and verbose:
-                lines.append(f"   Thinking: \"{fp.thinking_context[:150]}\"")
-            if fp.impact:
-                lines.append(f"   Impact: {fp.impact}")
+    # === Outcome section (primary) ===
+    if result.outcome and result.outcome.score is not None:
+        lines.append("What Shipped")
+        lines.append("\u2500" * 12)
+        if result.outcome.strengths:
+            for s in result.outcome.strengths:
+                lines.append(f"  + {s}")
+        if result.outcome.test_story:
+            lines.append(f"  T {result.outcome.test_story}")
+        if result.outcome.edits_per_commit is not None:
+            lines.append(f"  E {result.outcome.edits_per_commit} edits/commit")
+        if result.outcome.commit_style and result.outcome.commit_count > 0:
+            lines.append(f"    {result.outcome.commit_style} workflow")
         lines.append("")
 
-    # What To Fix
-    if result.remediations:
-        lines.append("What To Fix")
-        lines.append("\u2500" * 11)
-        severity_icon = {"critical": "!!!", "recommended": " !!", "optional": "  -"}
-        for rem in result.remediations:
-            icon = severity_icon.get(rem.severity, "  -")
-            lines.append(f"[{icon}] {rem.title} ({rem.severity})")
-            lines.append(f"      {rem.description}")
-            if rem.impact:
-                lines.append(f"      Impact: {rem.impact}")
+        if result.outcome.concerns or result.outcome.stuck_events or result.outcome.thrashed_files:
+            lines.append("Concerns")
+            lines.append("\u2500" * 8)
+            for c in result.outcome.concerns:
+                lines.append(f"  ! {c}")
+            for se in result.outcome.stuck_events:
+                lines.append(
+                    f"  S Stuck: {se.length} errors at "
+                    f"{se.position_pct:.0%} ({se.tool_name}: {se.hint[:50]})"
+                )
+            if result.outcome.thrashed_files:
+                tf = result.outcome.thrashed_files
+                lines.append(
+                    f"  ~ Thrashed: "
+                    + ", ".join(f"{f}({c}x)" for f, c in tf.items())
+                )
+            if result.outcome.uncommitted_files:
+                lines.append(
+                    f"  ? Uncommitted: "
+                    + ", ".join(result.outcome.uncommitted_files)
+                )
             lines.append("")
+    else:
+        # Non-build session — show basic summary
+        lines.append("What Happened")
+        lines.append("\u2500" * 13)
+        for line in result.summary:
+            lines.append(line)
+        lines.append("")
+
+    # === Process details (verbose only) ===
+    if verbose:
+        if result.failure_points:
+            lines.append("Process Details")
+            lines.append("\u2500" * 15)
+            for i, fp in enumerate(result.failure_points, 1):
+                loc = f"min {fp.minute:.0f}" if fp.minute is not None else f"step {fp.seq}"
+                lines.append(f"{i}. [{loc}] {_failure_label(fp.category)}")
+                lines.append(f"   {fp.description}")
+                if fp.thinking_context:
+                    lines.append(f"   Thinking: \"{fp.thinking_context[:150]}\"")
+                if fp.impact:
+                    lines.append(f"   Impact: {fp.impact}")
+            lines.append("")
+
+        if result.remediations:
+            lines.append("Process Remediations")
+            lines.append("\u2500" * 20)
+            severity_icon = {"critical": "!!!", "recommended": " !!", "optional": "  -"}
+            for rem in result.remediations:
+                icon = severity_icon.get(rem.severity, "  -")
+                lines.append(f"[{icon}] {rem.title} ({rem.severity})")
+                lines.append(f"      {rem.description}")
+                lines.append("")
 
     # Effective time
     if result.effective_minutes is not None and result.stats.duration_minutes:
