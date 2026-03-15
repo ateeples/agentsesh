@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>sesh — Agent Session Intelligence</title>
-<meta name="description" content="Find out why your AI coding sessions fail. Two commands, zero setup, zero dependencies.">
+<title>sesh — Grade your AI coding sessions</title>
+<meta name="description" content="Grade both sides of your AI coding sessions — outcome quality and collaboration quality. Two commands, zero setup, zero dependencies.">
 <style>
   :root {
     --bg: #0a0a0a;
@@ -49,7 +49,7 @@
     font-size: 17px;
     color: var(--muted);
     margin-bottom: 32px;
-    max-width: 480px;
+    max-width: 520px;
     line-height: 1.6;
   }
 
@@ -89,6 +89,17 @@
 
   .meta a { color: var(--muted); text-decoration: none; }
   .meta a:hover { text-decoration: underline; }
+
+  /* Stats bar */
+  .stats {
+    margin-top: 32px;
+    padding: 16px 0;
+    font-size: 13px;
+    color: var(--dim);
+    line-height: 1.9;
+  }
+
+  .stats strong { color: var(--muted); }
 
   /* Demos */
   .demos {
@@ -155,20 +166,12 @@
   .metric-row:nth-child(3) .bar-fill { transition-delay: 0.3s; }
   .metric-row:nth-child(4) .bar-fill { transition-delay: 0.4s; }
   .metric-row:nth-child(5) .bar-fill { transition-delay: 0.5s; }
-  .metric-row:nth-child(6) .bar-fill { transition-delay: 0.6s; }
-  .metric-row:nth-child(7) .bar-fill { transition-delay: 0.7s; }
-  .metric-row:nth-child(8) .bar-fill { transition-delay: 0.8s; }
-  .metric-row:nth-child(9) .bar-fill { transition-delay: 0.9s; }
 
   .metric-row:nth-child(1) .bar-empty { transition-delay: 0.6s; }
   .metric-row:nth-child(2) .bar-empty { transition-delay: 0.7s; }
   .metric-row:nth-child(3) .bar-empty { transition-delay: 0.8s; }
   .metric-row:nth-child(4) .bar-empty { transition-delay: 0.9s; }
   .metric-row:nth-child(5) .bar-empty { transition-delay: 1.0s; }
-  .metric-row:nth-child(6) .bar-empty { transition-delay: 1.1s; }
-  .metric-row:nth-child(7) .bar-empty { transition-delay: 1.2s; }
-  .metric-row:nth-child(8) .bar-empty { transition-delay: 1.3s; }
-  .metric-row:nth-child(9) .bar-empty { transition-delay: 1.4s; }
 
   /* Footer */
   footer {
@@ -200,60 +203,87 @@
 
 <div class="container">
   <div class="hero">
-    <div class="logo">┏━┓┏━╸┏━┓╻ ╻
-┗━┓┣╸ ┗━┓┣━┫
-┗━┛┗━╸┗━┛╹ ╹</div>
-    <p class="pitch">Find out why your AI coding sessions fail — and make your repo ready for the ones that don't.</p>
+    <div class="logo">&#9487;&#9473;&#9491;&#9487;&#9473;&#9590;&#9487;&#9473;&#9491;&#9595; &#9595;
+&#9495;&#9473;&#9491;&#9507;&#9590; &#9495;&#9473;&#9491;&#9507;&#9473;&#9515;
+&#9495;&#9473;&#9499;&#9495;&#9473;&#9590;&#9495;&#9473;&#9499;&#9593; &#9593;</div>
+    <p class="pitch">Grade both sides of your AI coding sessions. Outcome quality meets collaboration quality. 810 sessions proved: how you participate matters more than how the AI behaves.</p>
     <div class="install-box" onclick="copyInstall()">
       <span class="copied" id="copied">copied</span>
       <span class="prompt">$</span> pip install agentsesh
     </div>
-    <p class="meta">v0.10.0 &middot; Python 3.10+ &middot; zero dependencies &middot; <a href="https://github.com/ateeples/agentsesh">GitHub</a> &middot; <a href="https://pypi.org/project/agentsesh/">PyPI</a></p>
+    <p class="meta">v0.12.0 &middot; Python 3.10+ &middot; zero dependencies &middot; <a href="https://github.com/ateeples/agentsesh">GitHub</a> &middot; <a href="https://pypi.org/project/agentsesh/">PyPI</a></p>
+
+    <div class="stats">
+      <strong>The Partnership</strong> (43% ship rate) vs <strong>The Spec Dump</strong> (7%).<br>
+      Corrections predict shipping (r=0.242). Prompt length is negative.<br>
+      Engagement beats specification. See it in your own sessions.
+    </div>
   </div>
 
   <div class="demos">
     <div class="demo-pair">
 
       <div class="demo-block">
-        <h2>$ sesh audit</h2>
-        <div class="terminal" id="audit-demo"><span class="d">Repo Audit
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
+        <h2>$ sesh analyze</h2>
+        <div class="terminal">Session Analysis
+<span class="d">&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;</span>
 
-Metrics
-<span class="d">────────────────────────</span>
-<span class="metric-row">  bootstrap           [10/10] <span class="bar-fill">██████████</span><span class="bar-empty"></span></span>
-<span class="metric-row">  task_entry_points   [ 6/10] <span class="bar-fill">██████</span><span class="bar-empty">░░░░</span></span>
-<span class="metric-row">  validation_harness  [10/10] <span class="bar-fill">██████████</span><span class="bar-empty"></span></span>
-<span class="metric-row">  linting             [ 8/10] <span class="bar-fill">████████</span><span class="bar-empty">░░</span></span>
-<span class="metric-row">  codebase_map        [10/10] <span class="bar-fill">██████████</span><span class="bar-empty"></span></span>
-<span class="metric-row">  doc_structure       [10/10] <span class="bar-fill">██████████</span><span class="bar-empty"></span></span>
-<span class="metric-row">  decision_records    [10/10] <span class="bar-fill">██████████</span><span class="bar-empty"></span></span>
-<span class="metric-row">  agent_instructions  [ 8/10] <span class="bar-fill">████████</span><span class="bar-empty">░░</span></span>
-<span class="metric-row">  file_discipline     [ 8/10] <span class="bar-fill">████████</span><span class="bar-empty">░░</span></span>
+Duration: 47 min | 189 tool calls | ~$3.24
+Session type: BUILD_TESTED
 
-<span class="score-reveal"><strong>Score: 89/100  Grade: B</strong></span></div>
+<strong>Outcome</strong>
+<span class="d">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span>
+  Grade: B (74/100)
+  Commits: 2 | Tests: 14 run (14 pass)
+  Uncommitted files: 0
+
+<strong>Collaboration</strong>
+<span class="d">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span>
+  Score: A (85/100)
+  Style: The Partnership
+  Turns: 8 (42 words/turn avg)
+  Corrections: 2 (25%)  |  Affirmations: 3 (38%)
+  Autonomy: 24 tool calls/turn
+
+  Arc: short-directive &#8594; affirmation
+  Prompt trend: shortening
+
+  Tip: This is working. Keep doing what you're
+  doing &#8212; short directives, corrections when
+  the AI drifts, affirmation when it delivers.</div>
       </div>
 
       <div class="demo-block">
-        <h2>$ sesh analyze</h2>
-        <div class="terminal">Session Analysis
-<span class="d">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
+        <h2>$ sesh analyze --profile</h2>
+        <div class="terminal" id="profile-demo">Behavioral Profile
+<span class="d">&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;</span>
 
-Duration: 13 min | 39 tool calls | ~$0.81
-Files touched: 12 | Tests: 1 run (1 pass, 0 fail)
-Grade: A (92/100)
+Sessions: 99 analyzed (of 103 total)
 
-<strong>What Happened</strong>
-<span class="d">─────────────</span>
-39 tool calls, 2 errors (5% error rate).
-3 process issue(s) detected.
-Tests: 1/1 passed.
+<strong>Collaboration</strong>
+<span class="d">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span>
+  Average score: 97.0
 
-<strong>What To Fix</strong>
-<span class="d">───────────</span>
-<span class="m">[ !!]</span> Reduce error rate (recommended)
-<span class="m">[ !!]</span> Use dedicated tools instead of Bash (recommended)
-<span class="m">[  -]</span> Parallelize independent operations (optional)</div>
+<span class="metric-row">  The Partnership       64 (73%) <span class="bar-fill">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span><span class="bar-empty">&#9617;&#9617;&#9617;</span> &#8592; dominant</span>
+<span class="metric-row">  The Struggle          13 (15%) <span class="bar-fill">&#9608;</span><span class="bar-empty">&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;</span></span>
+<span class="metric-row">  The Micromanager      10 (11%) <span class="bar-fill">&#9608;</span><span class="bar-empty">&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;</span></span>
+<span class="metric-row">  The Spec Dump          1 ( 1%) <span class="bar-fill"></span><span class="bar-empty">&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;&#9617;</span></span>
+
+  Avg correction rate: 50%
+  Avg affirmation rate: 38%
+
+<span class="score-reveal">  &#8593; Stable: early avg 94.4 &#8594; recent avg 98.8</span>
+
+<strong>Outcome Grade Distribution</strong>
+<span class="d">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span>
+<span class="metric-row">  A   15 (17.6%)  <span class="bar-fill">&#9608;&#9608;&#9608;&#9608;&#9608;</span><span class="bar-empty"></span></span>
+  B   14 (16.5%)  &#9608;&#9608;&#9608;&#9608;&#9608;
+  C   16 (18.8%)  &#9608;&#9608;&#9608;&#9608;&#9608;&#9608;
+  D   29 (34.1%)  &#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;
+  F   11 (12.9%)  &#9608;&#9608;&#9608;&#9608;
+  Average score: 60.1
+
+  &#8593; Improving: early 59.0 &#8594; recent 72.9</div>
       </div>
 
     </div>
@@ -276,7 +306,7 @@ function copyInstall() {
   setTimeout(() => el.classList.remove('show'), 1500);
 }
 
-// Animate audit bars on scroll into view
+// Animate profile bars on scroll into view
 const observer = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     if (entry.isIntersecting) {
@@ -288,8 +318,8 @@ const observer = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.3 });
 
-const auditDemo = document.getElementById('audit-demo');
-if (auditDemo) observer.observe(auditDemo);
+const profileDemo = document.getElementById('profile-demo');
+if (profileDemo) observer.observe(profileDemo);
 </script>
 
 </body>
