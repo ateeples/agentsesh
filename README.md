@@ -1,6 +1,6 @@
 # sesh
 
-Find out why your AI coding sessions fail — and how to prevent it.
+See what your AI coding sessions actually look like — across all your projects, over time.
 
 ```bash
 pip install agentsesh
@@ -8,37 +8,87 @@ pip install agentsesh
 
 Zero dependencies. Python 3.10+. Works with Claude Code and OpenAI Codex CLI.
 
-## Try it now
+## Your behavioral profile
 
-**Diagnose your last session:**
+```bash
+sesh analyze --profile
+```
+
+Auto-discovers all sessions in your current project. Shows you patterns you can't see from inside a session:
+
+```
+Behavioral Profile
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Sessions: 93 analyzed
+
+Session Types
+─────────────
+  BUILD_UNCOMMITTED       46 (49%)
+  BUILD_TESTED            12 (13%)
+  BUILD_UNTESTED          20 (22%)
+  RESEARCH                 5 (5%)
+
+Shipping
+────────
+  Sessions with commits: 32 / 93 (34%)
+
+Where You Get Stuck
+───────────────────
+  Edit             9x  avg 5.7 errors  tends to happen mid
+    "<tool_use_error>File has not been read y"
+  Bash             5x  avg 3.6 errors  tends to happen mid
+
+  When you get stuck:
+    50-75%     5 ( 42%)  ████████
+
+Most Reworked Files
+───────────────────
+  cli.py                 58 edits  across 4 session(s)
+  schema.rs              86 edits  across 9 session(s)
+
+Recommendations
+───────────────
+[!!!] Low commit rate (critical)
+      Only 34% of sessions produced commits.
+      Action: Commit after each logical unit of work.
+
+[!!!] Read-before-edit violations (critical)
+      Stuck on "file not read" errors 9 times.
+      Action: Always read a file before editing it.
+
+[ !!] Chronically reworked files (recommended)
+      cli.py thrashed across 4 sessions — consider splitting.
+```
+
+The profile is the point. Not a grade on one session — patterns across all of them. Where you get stuck, what files you keep reworking, whether you're shipping or churning.
+
+## Single session analysis
 
 ```bash
 sesh analyze
 ```
 
-Auto-finds your most recent Claude Code session. No config, no setup. You get:
+Outcome-based grading. Measures what matters: did you ship, did tests pass, did you get stuck.
 
 ```
 Session Analysis
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Duration: 25 min | 78 tool calls | ~$1.73
-Files touched: 11
-Grade: A (93/100)
+Duration: 47 min | 312 tool calls | ~$8.20
+Files touched: 14
+Grade: A (90/100)
+Session type: BUILD_TESTED
 
 What Happened
 ─────────────
-78 tool calls, 1 errors (1% error rate).
-No critical failures, but 4 process issue(s) detected.
-
-What To Fix
-───────────
-[ !!] Use dedicated tools instead of Bash (recommended)
-[ !!] Research before implementation (recommended)
-[  -] Parallelize independent operations (optional)
+312 tool calls, 3 errors (1% error rate).
+11 commits. Tests: 398 passing.
 ```
 
-**Grade your repo's AI-readiness:**
+Process grades are anti-correlated with shipping — [we tested this](https://boldfaceline.com/posts/the-inversion). Sessions that score high on "process quality" ship less. So we measure outcomes: commits, test results, stuck events, rework.
+
+## Repo audit
 
 ```bash
 sesh audit
@@ -47,53 +97,27 @@ sesh audit
 Scores your repo on 9 metrics that determine whether an AI agent will succeed or struggle:
 
 ```
-Repo Audit
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Repo Audit: 89/100  Grade: B
 
-Score: 89/100  Grade: B
-
-Metrics
-────────────────────────
   bootstrap           [10/10] ██████████
   task_entry_points   [ 6/10] ██████░░░░
   validation_harness  [10/10] ██████████
   linting             [ 8/10] ████████░░
-  codebase_map        [10/10] ██████████
-  doc_structure       [10/10] ██████████
-  decision_records    [10/10] ██████████
   agent_instructions  [ 8/10] ████████░░
-  file_discipline     [ 8/10] ████████░░
 ```
-
-Both commands work on any repo. No database, no prior setup.
 
 ## Close the loop
 
-The analysis is useful. The feedback loop is the point.
-
 ```bash
-# Write findings directly into CLAUDE.md so the agent sees them next session
+# Generate CLAUDE.md rules from your behavioral profile
+sesh analyze --fix
+
+# Write session feedback directly into CLAUDE.md
 sesh analyze --feedback
 
 # Fail CI if repo AI-readiness drops below standard
 sesh audit --threshold 80
 ```
-
-## What it detects
-
-9 pattern detectors run on every session:
-
-| Pattern | What it catches |
-|---------|----------------|
-| `error_streak` | 3+ consecutive errors — agent is stuck, not fixing |
-| `write_without_read` | Editing files without reading them first |
-| `bash_overuse` | Using `cat`/`grep`/`find` when dedicated tools exist |
-| `low_read_ratio` | Not enough reading relative to writing |
-| `error_rate` | Overall error percentage above threshold |
-| `repeated_searches` | Same search query run multiple times |
-| `write_then_read` | Writing before understanding |
-| `scattered_files` | Touching too many directories (unfocused) |
-| `missed_parallelism` | Sequential reads that could have been parallel |
 
 ## More commands
 
@@ -109,6 +133,7 @@ sesh replay --errors         # Show only where things went wrong
 sesh test                    # Compare outcomes between two sessions
 sesh fix --patch             # Generate CLAUDE.md patch from analysis
 sesh search "auth bug"       # Full-text search across sessions
+sesh debug                   # Prompt debugger — trace decisions
 sesh-web                     # Launch browser dashboard (localhost:7433)
 ```
 
@@ -128,12 +153,6 @@ Let your agent self-analyze at runtime. Add to Claude Code (`~/.claude/settings.
   }
 }
 ```
-
-The agent gets tools like `sesh_reflect`, `sesh_report`, `sesh_sync`, and `sesh_search`. It can ingest its own transcripts at session start and review what went wrong last time.
-
-## Grading
-
-Sessions are scored 0–100 and graded A+ through F. Start at 100, deduct for anti-patterns, bonus for good habits. All weights configurable via `.sesh/config.json`.
 
 ## Supported formats
 
