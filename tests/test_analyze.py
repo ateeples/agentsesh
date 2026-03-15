@@ -512,10 +512,13 @@ class TestFormatAnalysis:
         assert "Process Details" in output
         assert "blind" in output.lower() or "auth.py" in output
 
-    def test_effective_time_shown(self):
+    def test_effective_time_shown_in_verbose(self):
         result = self._make_result()
+        # Effective time is verbose-only (confusing in default output)
         output = format_analysis(result)
-        assert "Effective" in output or "effective" in output
+        assert "Effective" not in output
+        output_v = format_analysis(result, verbose=True)
+        assert "Effective" in output_v
 
     def test_remediations_in_verbose(self):
         from sesh.analyzers.remediation import Remediation

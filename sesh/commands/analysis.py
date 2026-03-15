@@ -210,7 +210,12 @@ def cmd_analyze(args) -> None:
             )
             sys.exit(1)
         if not args.json:
-            print(f"Auto-detected: {path}\n", file=sys.stderr)
+            # Show a human-friendly project name, not the full path
+            project_name = _extract_project_name(path)
+            if project_name:
+                print(f"Latest session: {project_name}\n", file=sys.stderr)
+            else:
+                print(f"Latest session: {path.name}\n", file=sys.stderr)
 
     try:
         result = analyze_session(path)
@@ -370,6 +375,31 @@ def _write_feedback(result, args) -> None:
         print(f"Feedback written to {target} ({grade.grade}, {grade.score}/100)")
     else:
         print(f"No changes — {target} already has current feedback")
+
+
+def _extract_project_name(path: Path) -> str:
+    """Extract a human-friendly project name from a transcript path.
+
+    Claude Code stores transcripts in ~/.claude/projects/<encoded-path>/.
+    The encoded path uses dashes instead of slashes. We extract the last
+    meaningful directory name as the project name.
+
+    Returns empty string if extraction fails.
+    """
+    # Path looks like: ~/.claude/projects/-Users-foo-Projects-myapp/abc123.jsonl
+    parent_name = path.parent.name
+    if not parent_name or parent_name == "projects":
+        return ""
+
+    # Split on dashes and find the last meaningful segment
+    parts = parent_name.split("-")
+    # Filter out common path components
+    skip = {"Users", "Documents", "Projects", "home", "var", "tmp", ""}
+    meaningful = [p for p in parts if p not in skip]
+    if meaningful:
+        # Take the last 1-2 meaningful parts as the project name
+        return "-".join(meaningful[-2:]) if len(meaningful) >= 2 else meaningful[-1]
+    return ""
 
 
 def cmd_audit(args) -> None:

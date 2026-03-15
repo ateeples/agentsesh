@@ -529,34 +529,30 @@ def format_analysis(
         lines.append("\u2500" * 12)
         if result.outcome.strengths:
             for s in result.outcome.strengths:
-                lines.append(f"  + {s}")
+                lines.append(f"  {s}")
         if result.outcome.test_story:
-            lines.append(f"  T {result.outcome.test_story}")
-        if result.outcome.edits_per_commit is not None:
-            lines.append(f"  E {result.outcome.edits_per_commit} edits/commit")
-        if result.outcome.commit_style and result.outcome.commit_count > 0:
-            lines.append(f"    {result.outcome.commit_style} workflow")
+            lines.append(f"  {result.outcome.test_story}")
         lines.append("")
 
         if result.outcome.concerns or result.outcome.stuck_events or result.outcome.thrashed_files:
             lines.append("Concerns")
             lines.append("\u2500" * 8)
             for c in result.outcome.concerns:
-                lines.append(f"  ! {c}")
+                lines.append(f"  {c}")
             for se in result.outcome.stuck_events:
                 lines.append(
-                    f"  S Stuck: {se.length} errors at "
-                    f"{se.position_pct:.0%} ({se.tool_name}: {se.hint[:50]})"
+                    f"  Stuck: {se.length} consecutive errors at "
+                    f"{se.position_pct:.0%} through session ({se.tool_name})"
                 )
             if result.outcome.thrashed_files:
                 tf = result.outcome.thrashed_files
                 lines.append(
-                    f"  ~ Thrashed: "
-                    + ", ".join(f"{f}({c}x)" for f, c in tf.items())
+                    "  Heavily edited: "
+                    + ", ".join(f"{f} ({c}x)" for f, c in tf.items())
                 )
             if result.outcome.uncommitted_files:
                 lines.append(
-                    f"  ? Uncommitted: "
+                    "  Uncommitted: "
                     + ", ".join(result.outcome.uncommitted_files)
                 )
             lines.append("")
@@ -579,6 +575,33 @@ def format_analysis(
     if result.collaboration and result.collaboration.human_turns > 0:
         lines.append("")
         lines.append(format_collaboration(result.collaboration))
+
+        # Surface the archetype/outcome contradiction when it exists
+        if (
+            result.outcome
+            and result.outcome.score is not None
+            and result.collaboration.archetype
+        ):
+            outcome_good = result.outcome.score >= 70
+            archetype_predicts_bad = result.collaboration.archetype in (
+                "The Spec Dump", "The Micromanager", "The Autopilot"
+            )
+            archetype_predicts_ok = result.collaboration.archetype in (
+                "The Partnership", "The Struggle"
+            )
+            outcome_bad = result.outcome.score < 50
+
+            if archetype_predicts_bad and outcome_good:
+                lines.append(
+                    f"  Note: This style usually ships less, but this session"
+                    f" shipped well. It worked here."
+                )
+            elif archetype_predicts_ok and outcome_bad:
+                lines.append(
+                    f"  Note: Good collaboration, weak outcome. The partnership"
+                    f" was there — check if the work got committed."
+                )
+
         lines.append("")
 
     # === Process details (verbose only) ===
@@ -606,16 +629,17 @@ def format_analysis(
                 lines.append(f"      {rem.description}")
                 lines.append("")
 
-    # Effective time
-    if result.effective_minutes is not None and result.stats.duration_minutes:
-        dur = result.stats.duration_minutes
-        eff = result.effective_minutes
-        pct = (eff / dur * 100) if dur > 0 else 100
-        lines.append(f"Effective time: {eff:.0f} of {dur:.0f} min ({pct:.0f}%)")
-    elif result.effective_minutes is not None:
-        lines.append(f"Effective time: {result.effective_minutes:.0f} min")
+    # Effective time and grade breakdown (verbose only — confusing in default output)
+    if verbose:
+        if result.effective_minutes is not None and result.stats.duration_minutes:
+            dur = result.stats.duration_minutes
+            eff = result.effective_minutes
+            pct = (eff / dur * 100) if dur > 0 else 100
+            lines.append(
+                f"Effective time: {eff:.0f} of {dur:.0f} min ({pct:.0f}%)"
+                f" (time before first stuck event)"
+            )
 
-    # Grade breakdown (verbose)
     if verbose and (result.grade.deductions or result.grade.bonuses):
         lines.append("")
         lines.append("Grade Breakdown")
@@ -631,10 +655,9 @@ def format_analysis(
         next_steps = []
         if result.outcome.concerns or result.outcome.stuck_events:
             next_steps.append("sesh analyze --fix      Generate CLAUDE.md patch from this session")
-        next_steps.append("sesh analyze --collab    See how your collaboration style affects outcomes")
         next_steps.append("sesh analyze --profile  See patterns across all your sessions")
         if not verbose:
-            next_steps.append("sesh analyze -v         Show process details")
+            next_steps.append("sesh analyze -v         Show process details and effective time")
         if next_steps:
             lines.append("Next steps")
             lines.append("\u2500" * 10)
