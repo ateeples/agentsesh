@@ -21,9 +21,14 @@ from sesh.analyzers.profile_remediation import (
 from sesh.parsers.base import ToolCall
 
 
+_jsonl_counter = 0
+
+
 def _make_jsonl(turns: list[str], tmp_dir: Path) -> Path:
     """Create a minimal JSONL transcript with given human turns."""
-    path = tmp_dir / f"session_{id(turns)}.jsonl"
+    global _jsonl_counter
+    _jsonl_counter += 1
+    path = tmp_dir / f"session_{_jsonl_counter}.jsonl"
     lines = []
     for i, text in enumerate(turns):
         # User turn
@@ -165,6 +170,19 @@ class TestBuildProfileWithPaths:
             # Should not crash, even if the JSONL is minimal
             assert profile.sessions_analyzed >= 0
 
+    def test_paths_length_mismatch_raises(self):
+        """Mismatched paths and sessions lengths should raise ValueError."""
+        import pytest
+
+        tool_calls = _make_tool_calls(20)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _make_jsonl(["hello"], Path(tmp))
+            with pytest.raises(ValueError, match="paths length"):
+                build_profile(
+                    [(tool_calls, "s1"), (tool_calls, "s2")],
+                    paths=[path],  # Only 1 path for 2 sessions
+                )
+
     def test_archetype_distribution_populated(self):
         """Archetype distribution should count archetypes across sessions."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -240,20 +258,23 @@ class TestCollaborationTrend:
             sessions = []
             paths = []
 
-            # Early sessions: minimal engagement (low scores)
+            # Early sessions: low engagement, no corrections, no affirmation
+            # (low collab score: base 50, no engagement = -15, long prompts)
             for i in range(6):
                 turns = [
-                    "Build this entire application from scratch with these detailed specifications that I'm going to lay out in great detail here",
-                ] * 2  # Spec dump style — few turns, long
+                    "Build this entire application from scratch with all the detailed specifications",
+                    "Now build the second part of the application with all the remaining features",
+                ]
                 p = _make_jsonl(turns, tmp_path)
                 paths.append(p)
-                sessions.append((_make_tool_calls(max(15, i * 3)), f"early-{i}"))
+                sessions.append((_make_tool_calls(15), f"early-{i}"))
 
             # Later sessions: engaged partnership (high scores)
             for i in range(6):
                 turns = [
                     "Build me a parser",
                     "No, use streaming instead",
+                    "Wait, not that way",
                     "Perfect, keep going",
                     "Great work",
                     "Yes, ship it",
@@ -268,9 +289,10 @@ class TestCollaborationTrend:
 
             profile = build_profile(sessions, paths=paths)
 
-            # Should detect improving trend if enough data
-            if profile.collab_trend:
-                assert profile.collab_trend in ("improving", "stable", "declining")
+            # 12 sessions with collab scores, trend should be computed
+            # Early sessions: ~35 score (no engagement, few turns)
+            # Later sessions: ~95+ (corrections, affirmations, good autonomy)
+            assert profile.collab_trend == "improving"
 
     def test_no_trend_with_few_sessions(self):
         """Trend requires minimum sessions to compute."""
@@ -362,7 +384,8 @@ class TestFormatProfileCollaboration:
             sessions_analyzed=10,
         )
         output = format_profile(p)
-        assert "Collaboration" not in output or "Score" not in output
+        # No collaboration grade distribution = no collaboration section
+        assert "Collaboration" not in output
 
     def test_archetype_distribution_shown(self):
         """Archetype distribution should be displayed."""
@@ -370,6 +393,7 @@ class TestFormatProfileCollaboration:
             total_sessions=10,
             sessions_analyzed=10,
             avg_collab_score=65.0,
+            collab_grade_distribution={"B": 4, "C": 2},
             archetype_distribution={"The Partnership": 4, "The Spec Dump": 2},
             dominant_archetype="The Partnership",
         )
@@ -382,6 +406,7 @@ class TestFormatProfileCollaboration:
             total_sessions=20,
             sessions_analyzed=20,
             avg_collab_score=70.0,
+            collab_grade_distribution={"B": 10, "A": 5, "C": 5},
             collab_trend="improving",
             early_collab_score=55.0,
             recent_collab_score=80.0,
@@ -453,6 +478,8 @@ class TestCollaborationRemediations:
     def test_declining_collab_triggers_remediation(self):
         """Declining collaboration trend should trigger a warning."""
         profile = _collab_profile(
+            dominant_archetype="The Partnership",
+            archetype_distribution={"The Partnership": 20, "The Struggle": 5},
             collab_trend="declining",
             early_collab_score=75.0,
             recent_collab_score=50.0,

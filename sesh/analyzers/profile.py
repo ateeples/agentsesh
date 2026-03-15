@@ -8,6 +8,7 @@ This is the thing that actually changes behavior — not "your last
 session was a B" but "across N sessions, here's what keeps happening."
 """
 
+import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -112,7 +113,15 @@ def build_profile(
 
     Returns:
         BehavioralProfile with cross-session analysis.
+
+    Raises:
+        ValueError: If paths is provided but length doesn't match sessions.
     """
+    if paths is not None and len(paths) != len(sessions):
+        raise ValueError(
+            f"paths length ({len(paths)}) must match sessions length ({len(sessions)})"
+        )
+
     profile = BehavioralProfile(
         total_sessions=len(sessions),
         sessions_analyzed=0,
@@ -199,8 +208,8 @@ def build_profile(
                     correction_rates.append(collab.correction_rate)
                     affirmation_rates.append(collab.affirmation_rate)
                     words_per_turn_all.append(collab.avg_words_per_turn)
-            except Exception:
-                pass  # Skip sessions with collaboration parse errors
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                pass  # Skip sessions with file/parse errors
 
     # === Aggregate metrics ===
 
@@ -484,7 +493,7 @@ def format_profile(profile: BehavioralProfile) -> str:
         )
 
     # Collaboration
-    if profile.avg_collab_score > 0:
+    if profile.collab_grade_distribution:
         lines.append("")
         lines.append("Collaboration")
         lines.append("\u2500" * 13)
