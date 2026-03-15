@@ -256,8 +256,18 @@ def build_profile(
             else:
                 pos_bias = "late"
 
-            # Most common hint
-            hint_counter = Counter(e.hint[:40] for e in events)
+            # Most common hint — truncate at word boundary
+            def _truncate_hint(h: str, max_len: int = 60) -> str:
+                h = h.replace("\n", " ").strip()
+                if len(h) <= max_len:
+                    return h
+                # Find last space before max_len
+                cut = h[:max_len].rfind(" ")
+                if cut < 20:
+                    cut = max_len  # no good break point, hard cut
+                return h[:cut] + "..."
+
+            hint_counter = Counter(_truncate_hint(e.hint) for e in events)
             common_hint = hint_counter.most_common(1)[0][0]
 
             profile.stuck_patterns.append(StuckPattern(
@@ -424,7 +434,9 @@ def format_profile(profile: BehavioralProfile) -> str:
         lines.append("")
         lines.append("Efficiency")
         lines.append("\u2500" * 10)
-        lines.append(f"  Avg edits/commit: {profile.avg_edits_per_commit}")
+        avg = profile.avg_edits_per_commit
+        context = "tight" if avg <= 5 else "typical" if avg <= 15 else "high rework"
+        lines.append(f"  Avg edits/commit: {avg} ({context})")
         lines.append(f"  Median edits/commit: {profile.median_edits_per_commit}")
 
     # Stuck patterns
@@ -501,6 +513,13 @@ def format_profile(profile: BehavioralProfile) -> str:
 
         # Archetype distribution
         if profile.archetype_distribution:
+            _archetype_desc = {
+                "The Partnership": "short directives + corrections + affirmation",
+                "The Spec Dump": "detailed spec upfront, human disengages",
+                "The Autopilot": "direction given, no feedback loop",
+                "The Struggle": "correction-heavy, human stays engaged",
+                "The Micromanager": "checking every few tool calls",
+            }
             lines.append("")
             total_arch = sum(profile.archetype_distribution.values())
             for archetype, count in sorted(
@@ -513,6 +532,9 @@ def format_profile(profile: BehavioralProfile) -> str:
                 lines.append(
                     f"  {archetype:22s} {count:3d} ({pct:.0f}%){marker}"
                 )
+                desc = _archetype_desc.get(archetype)
+                if desc:
+                    lines.append(f"    {desc}")
 
         # Collaboration metrics
         if profile.avg_correction_rate > 0 or profile.avg_affirmation_rate > 0:

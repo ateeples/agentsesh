@@ -380,3 +380,155 @@ class TestOutputLength:
         verbose_lines = len(format_analysis(result, verbose=True).split("\n"))
         # Verbose should add content, not be identical
         assert verbose_lines >= default_lines
+
+
+# === Profile UX Tests ===
+# What a stranger sees when they run `sesh analyze --profile`.
+
+
+from sesh.analyzers.profile import BehavioralProfile, StuckPattern, format_profile
+
+
+def _build_profile(
+    archetype_dist=None,
+    dominant="The Partnership",
+    stuck_patterns=None,
+    avg_edits=10.6,
+) -> BehavioralProfile:
+    """Create a realistic behavioral profile for UX testing."""
+    return BehavioralProfile(
+        total_sessions=100,
+        sessions_analyzed=95,
+        type_distribution={
+            "BUILD_UNCOMMITTED": 45,
+            "BUILD_TESTED": 20,
+            "BUILD_UNTESTED": 15,
+            "RESEARCH": 10,
+            "WORKSPACE": 5,
+        },
+        sessions_with_commits=35,
+        total_commits=110,
+        avg_commits_per_build=1.4,
+        sessions_with_tests=25,
+        test_resolution_rate=0.96,
+        stuck_patterns=stuck_patterns or [],
+        sessions_with_stuck=8,
+        thrashed_files=[],
+        avg_edits_per_commit=avg_edits,
+        median_edits_per_commit=6.0,
+        outcome_grades={"A": 15, "B": 12, "C": 18, "D": 30, "F": 10},
+        avg_outcome_score=58.0,
+        early_avg_score=55.0,
+        recent_avg_score=70.0,
+        trend="improving",
+        avg_collab_score=92.0,
+        collab_grade_distribution={"A": 50, "B": 20, "C": 15, "D": 10},
+        archetype_distribution=archetype_dist or {
+            "The Partnership": 60,
+            "The Struggle": 15,
+            "The Micromanager": 12,
+            "The Spec Dump": 3,
+            "The Autopilot": 5,
+        },
+        dominant_archetype=dominant,
+        collab_trend="stable",
+        early_collab_score=90.0,
+        recent_collab_score=93.0,
+        avg_correction_rate=0.45,
+        avg_affirmation_rate=0.35,
+        avg_words_per_turn=200.0,
+    )
+
+
+class TestProfileArchetypeExplanations:
+    """Archetype names alone mean nothing to a stranger — descriptions required."""
+
+    def test_each_archetype_has_description(self):
+        profile = _build_profile()
+        output = format_profile(profile)
+        for archetype in ["Partnership", "Struggle", "Micromanager", "Spec Dump", "Autopilot"]:
+            assert archetype in output, f"Missing archetype: {archetype}"
+        # Each archetype line should be followed by a description line
+        lines = output.split("\n")
+        for i, line in enumerate(lines):
+            if "The Partnership" in line and "%" in line:
+                assert i + 1 < len(lines), "No description after The Partnership"
+                assert "directive" in lines[i + 1].lower() or "correction" in lines[i + 1].lower(), (
+                    f"Description after Partnership should explain the style, got: {lines[i + 1]}"
+                )
+
+    def test_spec_dump_description_warns(self):
+        """The Spec Dump description should signal this style is problematic."""
+        profile = _build_profile()
+        output = format_profile(profile)
+        lines = output.split("\n")
+        for i, line in enumerate(lines):
+            if "The Spec Dump" in line and "%" in line:
+                assert "disengage" in lines[i + 1].lower(), (
+                    "Spec Dump description should mention disengagement"
+                )
+
+
+class TestProfileStuckHints:
+    """Error hints must be readable — no mid-word truncation."""
+
+    def test_no_mid_word_truncation(self):
+        """Hints should end at word boundaries or with '...'."""
+        profile = _build_profile(
+            stuck_patterns=[
+                StuckPattern(
+                    tool="Write",
+                    hint="<tool_use_error>File has not been read yet. Read it first before editing.",
+                    count=4,
+                    avg_length=3.0,
+                    position_bias="late",
+                ),
+            ]
+        )
+        output = format_profile(profile)
+        # Should NOT end mid-word like "read y" or "been read y"
+        assert "read y\"" not in output, "Hint truncated mid-word"
+        # Should either show full message or end with "..."
+        for line in output.split("\n"):
+            if '"<tool_use_error>' in line:
+                assert line.rstrip().endswith('..."') or "Read it first" in line, (
+                    f"Hint should end cleanly: {line}"
+                )
+
+    def test_short_hints_not_truncated(self):
+        """Short error messages should appear in full."""
+        profile = _build_profile(
+            stuck_patterns=[
+                StuckPattern(
+                    tool="Bash",
+                    hint="Exit code 1",
+                    count=3,
+                    avg_length=3.5,
+                    position_bias="mid",
+                ),
+            ]
+        )
+        output = format_profile(profile)
+        assert "Exit code 1" in output
+        assert "..." not in output.split("Exit code 1")[1].split("\n")[0]
+
+
+class TestProfileEfficiencyContext:
+    """Metrics without benchmarks are meaningless to a stranger."""
+
+    def test_edits_per_commit_has_context(self):
+        profile = _build_profile(avg_edits=10.6)
+        output = format_profile(profile)
+        assert "typical" in output or "tight" in output or "high rework" in output, (
+            "Edits/commit should include a benchmark label"
+        )
+
+    def test_tight_efficiency_labeled(self):
+        profile = _build_profile(avg_edits=3.0)
+        output = format_profile(profile)
+        assert "tight" in output
+
+    def test_high_rework_labeled(self):
+        profile = _build_profile(avg_edits=25.0)
+        output = format_profile(profile)
+        assert "high rework" in output
