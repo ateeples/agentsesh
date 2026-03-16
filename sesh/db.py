@@ -327,12 +327,13 @@ class Database:
 
     # --- Query methods ---
 
-    def list_sessions(self, limit: int = 20) -> list[dict]:
-        """List sessions ordered by ingestion time (newest first)."""
+    def list_sessions(self, limit: int = 20, order_by: str = "start_time") -> list[dict]:
+        """List sessions ordered by start_time (newest first) or ingested_at."""
+        order_col = "start_time" if order_by == "start_time" else "ingested_at"
         rows = self.conn.execute(
-            "SELECT id, grade, score, tool_call_count, error_count, "
-            "duration_minutes, model, ingested_at, start_time "
-            "FROM sessions ORDER BY ingested_at DESC LIMIT ?",
+            f"SELECT id, grade, score, tool_call_count, error_count, "
+            f"duration_minutes, model, ingested_at, start_time "
+            f"FROM sessions ORDER BY {order_col} DESC LIMIT ?",
             (limit,),
         ).fetchall()
         return [dict(r) for r in rows]

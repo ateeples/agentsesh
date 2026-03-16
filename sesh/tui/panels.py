@@ -340,6 +340,90 @@ def draw_details(
                         truncate(f"ID: {sid}", width - 6), dim_attr())
 
 
+def draw_live(win, y: int, x: int, width: int, height: int, snap) -> int:
+    """Draw the live session monitoring panel.
+
+    Shows real-time stats for the currently active session.
+    Returns height consumed.
+    """
+    from ..live import LiveSnapshot
+
+    if snap is None:
+        draw_box(win, y, x, 3, width, "Live")
+        safe_addstr(win, y + 1, x + 3, "No active session detected", dim_attr())
+        return 3
+
+    # Title with active indicator
+    indicator = "\u25cf" if snap.active else "\u25cb"  # ● or ○
+    title = f"Live {indicator} {snap.project}" if snap.project else f"Live {indicator}"
+    draw_box(win, y, x, height, width, title)
+
+    available_rows = height - 2
+    row = 0
+    inner_x = x + 3
+    inner_w = width - 6
+
+    def add_line(text: str, attr: int = 0) -> None:
+        nonlocal row
+        if row >= available_rows:
+            return
+        safe_addstr(win, y + 1 + row, inner_x, truncate(text, inner_w), attr or dim_attr())
+        row += 1
+
+    # Stats line
+    dur_min = int(snap.duration_seconds / 60)
+    cost_str = f"${snap.estimated_cost:.2f}" if snap.estimated_cost else "$0.00"
+    add_line(
+        f"{snap.tool_calls} calls  {snap.errors} err  "
+        f"{snap.files_read}R/{snap.files_written}W files  "
+        f"{dur_min}m  {cost_str}",
+        header_attr(),
+    )
+
+    # Tests
+    if snap.test_runs > 0:
+        test_color = curses.color_pair(1) if snap.test_failures == 0 else curses.color_pair(4)
+        add_line(
+            f"Tests: {snap.test_passes}/{snap.test_runs} pass"
+            f"{'  ' + str(snap.test_failures) + ' FAIL' if snap.test_failures else ''}",
+            test_color,
+        )
+
+    # Collaboration
+    if snap.human_turns >= 2 and snap.archetype:
+        arch_color = curses.color_pair(1) if snap.archetype == "Partnership" else (
+            curses.color_pair(3) if snap.archetype in ("Spec Dump", "Micromanager") else dim_attr()
+        )
+        add_line(
+            f"Collab: {snap.archetype} ({snap.collab_score})  "
+            f"{snap.corrections}c {snap.affirmations}a  "
+            f"~{snap.avg_prompt_words:.0f} words/turn",
+            arch_color,
+        )
+
+    # Nudges
+    for nudge in snap.nudges:
+        if row >= available_rows:
+            break
+        if nudge.level == "alert":
+            attr = curses.color_pair(4) | curses.A_BOLD
+            prefix = "!! "
+        elif nudge.level == "warn":
+            attr = curses.color_pair(3)
+            prefix = " ! "
+        else:
+            attr = curses.color_pair(2)
+            prefix = "   "
+        add_line(f"{prefix}{nudge.message}", attr)
+
+    # Fill remaining rows (avoid visual artifacts)
+    while row < available_rows:
+        safe_addstr(win, y + 1 + row, inner_x, " " * inner_w, dim_attr())
+        row += 1
+
+    return height
+
+
 def _score_to_grade(score: float) -> str:
     """Convert numeric score to letter grade."""
     if score >= 95:

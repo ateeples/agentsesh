@@ -131,10 +131,11 @@ sesh report                  # Cross-session trends
 sesh replay                  # Step-by-step session replay
 sesh replay --errors         # Show only where things went wrong
 sesh test                    # Compare outcomes between two sessions
+sesh tui                     # Live terminal dashboard (monitors active session)
+sesh live                    # Lightweight live monitor (for small panes)
 sesh fix --patch             # Generate CLAUDE.md patch from analysis
 sesh search "auth bug"       # Full-text search across sessions
 sesh debug                   # Prompt debugger — trace decisions
-sesh-web                     # Launch browser dashboard (localhost:7433)
 ```
 
 ## MCP Server

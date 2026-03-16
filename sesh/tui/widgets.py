@@ -172,17 +172,15 @@ def format_duration(minutes: float | None) -> str:
 
 
 def format_date(timestamp: str | None) -> str:
-    """Format an ISO timestamp to MM-DD HH:MM."""
+    """Format an ISO timestamp to MM-DD HH:MM in local time."""
     if not timestamp:
         return "          "
-    # Parse ISO format: 2024-03-14T16:29:00...
     try:
-        # Handle both Z and +00:00 suffixes
+        from datetime import datetime, timezone
         ts = timestamp.replace("Z", "+00:00")
-        # Extract date/time parts directly from string
-        date_part = ts[:10]  # YYYY-MM-DD
-        time_part = ts[11:16]  # HH:MM
-        month_day = date_part[5:]  # MM-DD
-        return f"{month_day} {time_part}"
-    except (IndexError, ValueError):
+        dt = datetime.fromisoformat(ts)
+        # Convert to local time
+        local_dt = dt.astimezone()
+        return local_dt.strftime("%m-%d %H:%M")
+    except (IndexError, ValueError, TypeError):
         return timestamp[:11] if len(timestamp) >= 11 else timestamp

@@ -188,17 +188,79 @@ def cmd_list(args) -> None:
 
 def cmd_tui(args) -> None:
     """Launch interactive terminal dashboard."""
+    live = not getattr(args, "no_live", False)
+
     sesh_dir = find_sesh_dir()
-    if not sesh_dir:
-        print("No .sesh/ directory found. Run `sesh init` first.", file=sys.stderr)
+    db = None
+    if sesh_dir:
+        db = Database(sesh_dir / "sesh.db")
+    elif not live:
+        print("No .sesh/ directory found. Run `sesh init` first, or use --live.", file=sys.stderr)
         sys.exit(1)
 
-    db = Database(sesh_dir / "sesh.db")
     try:
-        from .tui import main as tui_main
-        tui_main(db)
+        from .tui.app import main as tui_main
+        tui_main(db=db, live=live)
     finally:
-        db.close()
+        if db:
+            db.close()
+
+
+def cmd_live(args) -> None:
+    """Show live session monitor (non-TUI, simple text output)."""
+    import time
+    from .live import snapshot
+
+    interval = getattr(args, "interval", 3.0)
+    print("Watching for active sessions... (Ctrl+C to stop)\n")
+
+    try:
+        while True:
+            snap = snapshot()
+            if snap is None:
+                print("\r  No active session detected", end="", flush=True)
+                time.sleep(interval)
+                continue
+
+            # Clear and redraw
+            lines = []
+            dur_min = int(snap.duration_seconds / 60)
+            indicator = "\033[92m●\033[0m" if snap.active else "\033[90m○\033[0m"
+            lines.append(
+                f"{indicator} {snap.project or 'session'} | "
+                f"{snap.tool_calls} calls | {snap.errors} err | "
+                f"{snap.files_read}R/{snap.files_written}W files | "
+                f"{dur_min}m | ~${snap.estimated_cost:.2f}"
+            )
+
+            if snap.test_runs > 0:
+                color = "\033[92m" if snap.test_failures == 0 else "\033[91m"
+                lines.append(
+                    f"  Tests: {color}{snap.test_passes}/{snap.test_runs} pass\033[0m"
+                    f"{'  ' + str(snap.test_failures) + ' FAIL' if snap.test_failures else ''}"
+                )
+
+            if snap.archetype:
+                lines.append(
+                    f"  Collab: {snap.archetype} ({snap.collab_score}) | "
+                    f"{snap.corrections}c {snap.affirmations}a | "
+                    f"~{snap.avg_prompt_words:.0f} words/turn"
+                )
+
+            for nudge in snap.nudges:
+                if nudge.level == "alert":
+                    lines.append(f"  \033[91m!! {nudge.message}\033[0m")
+                elif nudge.level == "warn":
+                    lines.append(f"  \033[93m ! {nudge.message}\033[0m")
+                else:
+                    lines.append(f"  \033[36m   {nudge.message}\033[0m")
+
+            # Move cursor up and overwrite
+            output = "\n".join(lines)
+            print(f"\033[H\033[J{output}", flush=True)  # Clear screen + print
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\nStopped.")
 
 
 def cmd_stats(args) -> None:
@@ -343,10 +405,12 @@ def _print_banner() -> None:
         *logo,
         "",
         f"  {B}{W}$ sesh analyze{R}       {IT}{D}diagnose your last session{R}",
+        f"  {B}{W}$ sesh tui{R}           {IT}{D}live dashboard (monitors active session){R}",
         f"  {B}{W}$ sesh audit{R}         {IT}{D}grade your repo's AI-readiness{R}",
         "",
         f"  {GR}{'─' * 44}{R}",
         "",
+        row("live", "lightweight live monitor"),
         row("reflect", "analyze ingested session"),
         row("report", "cross-session trends"),
         row("replay", "step-by-step playback"),
@@ -470,7 +534,13 @@ def main() -> None:
                          help="Minimum score to pass (exit 1 if below). For CI gates.")
 
     # --- Interactive commands ---
-    sub.add_parser("tui", help="Terminal dashboard")
+    tui_p = sub.add_parser("tui", help="Terminal dashboard (live session monitoring by default)")
+    tui_p.add_argument("--no-live", action="store_true",
+                        help="Disable live session monitoring")
+
+    live_p = sub.add_parser("live", help="Live session monitor (simple text output)")
+    live_p.add_argument("--interval", type=float, default=3.0,
+                        help="Refresh interval in seconds (default: 3)")
 
     # --- Background/daemon commands ---
     watch_p = sub.add_parser("watch", help="Auto-ingest new sessions from directories")
@@ -508,6 +578,7 @@ def main() -> None:
         "audit": cmd_audit,
         "watch": cmd_watch,
         "tui": cmd_tui,
+        "live": cmd_live,
     }
 
     cmd_func = commands.get(args.command)
