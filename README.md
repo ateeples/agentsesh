@@ -88,6 +88,16 @@ What Happened
 
 Process grades are anti-correlated with shipping — [we tested this](https://boldfaceline.com/posts/the-inversion). Sessions that score high on "process quality" ship less. So we measure outcomes: commits, test results, stuck events, rework.
 
+## Collaboration analysis
+
+```bash
+sesh analyze
+```
+
+Every session also gets a collaboration grade — how well the human and AI worked together. Across 810 sessions, the [collaboration pattern predicted shipping better than any process metric](https://boldfaceline.com/posts/the-partnership-model). Short directions + corrections when the AI drifts → 43% ship rate. Detailed specs with no interaction → 7%.
+
+The collaboration score shows your archetype (Partnership, Struggle, Autopilot, Spec Dump, Micromanager) and how it evolves across sessions with `--profile`.
+
 ## Repo audit
 
 ```bash
