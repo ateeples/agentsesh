@@ -92,6 +92,16 @@ _SYSTEM_TAG_RE = re.compile(
     re.DOTALL,
 )
 
+# Skill expansion pattern — when user types /tdd or /ship, the JSONL stores
+# the full skill prompt (500+ words) as a "user" message. We need to strip
+# the skill body and keep only the user's actual arguments.
+_SKILL_EXPANSION_RE = re.compile(
+    r"Base directory for this skill:.*?(?=ARGUMENTS:|$)",
+    re.DOTALL,
+)
+# Also strip the ARGUMENTS: prefix itself
+_SKILL_ARGS_PREFIX_RE = re.compile(r"^ARGUMENTS:\s*", re.MULTILINE)
+
 
 # --- Data types ---
 
@@ -244,6 +254,10 @@ def extract_human_turns(path: Path) -> list[HumanTurn]:
 
             # Strip system noise
             text = _SYSTEM_TAG_RE.sub("", text).strip()
+
+            # Strip skill expansions — keep only the user's actual arguments
+            text = _SKILL_EXPANSION_RE.sub("", text).strip()
+            text = _SKILL_ARGS_PREFIX_RE.sub("", text).strip()
 
             # Skip empty or trivial turns
             if not text or len(text) <= 1:

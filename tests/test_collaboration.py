@@ -194,6 +194,45 @@ class TestExtractHumanTurns:
         assert turns[0].text == "Now fix this"
         assert "result data" not in turns[0].text
 
+    def test_strips_skill_expansions_with_args(self, tmp_path):
+        """Skill expansions are stripped, keeping only the user's ARGUMENTS."""
+        path = tmp_path / "session.jsonl"
+        skill_text = (
+            "Base directory for this skill: /path/to/skill\n\n"
+            "# My Skill\n\nThis is a long skill prompt with instructions "
+            "that goes on for many lines and hundreds of words.\n\n"
+            "ARGUMENTS: implement step 5 of the plan"
+        )
+        record = {
+            "type": "user",
+            "timestamp": "2026-03-14T10:00:00Z",
+            "message": {"content": [{"type": "text", "text": skill_text}]}
+        }
+        path.write_text(json.dumps(record))
+        turns = extract_human_turns(path)
+        assert len(turns) == 1
+        assert "implement step 5" in turns[0].text
+        assert "Base directory" not in turns[0].text
+        assert "long skill prompt" not in turns[0].text
+        assert turns[0].word_count < 20  # Just the args, not the 500+ word skill
+
+    def test_strips_skill_expansions_without_args(self, tmp_path):
+        """Skill expansions with no ARGUMENTS produce empty turns (skipped)."""
+        path = tmp_path / "session.jsonl"
+        skill_text = (
+            "Base directory for this skill: /path/to/skill\n\n"
+            "# Goodnight\n\nYou're going to sleep. This is how you tuck yourself in."
+        )
+        record = {
+            "type": "user",
+            "timestamp": "2026-03-14T10:00:00Z",
+            "message": {"content": [{"type": "text", "text": skill_text}]}
+        }
+        path.write_text(json.dumps(record))
+        turns = extract_human_turns(path)
+        # No ARGUMENTS = empty after stripping = skipped
+        assert len(turns) == 0
+
     def test_skips_empty_turns(self, tmp_path):
         """Empty or trivial text is skipped."""
         path = tmp_path / "session.jsonl"
