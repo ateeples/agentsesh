@@ -338,20 +338,12 @@ def _generate_nudges(snap: LiveSnapshot) -> list[LiveNudge]:
                 f"{short} edited {count}x. Read the full file first?",
             ))
 
-    # Long session warning
-    if snap.duration_seconds > 7200:  # 2 hours
-        mins = int(snap.duration_seconds / 60)
-        nudges.append(LiveNudge(
-            "info",
-            f"Session: {mins} min. Quality tends to drop after 100 tool calls.",
-        ))
-
-    # Spec dump detection
-    if snap.archetype == "Spec Dump":
-        nudges.append(LiveNudge(
-            "info",
-            "Long prompts detected. Shorter directives + corrections ship more.",
-        ))
+    # NOTE: Removed "quality drops after 100 tool calls" nudge — that was
+    # based on process grades, not outcomes. Long sessions ship fine.
+    #
+    # NOTE: Removed "Spec Dump" nudge — skill expansions (/tdd, /ship etc)
+    # inflate word counts, making short commands look like spec dumps.
+    # The archetype detection needs to filter skill text before this is useful.
 
     # Positive reinforcement
     if snap.test_runs >= 3 and snap.test_passes >= 2 and not nudges:

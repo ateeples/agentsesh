@@ -111,10 +111,11 @@ class TestGenerateNudges:
         nudges = _generate_nudges(snap)
         assert any("edited" in n.message.lower() for n in nudges)
 
-    def test_long_session(self):
+    def test_long_session_no_false_warning(self):
+        """Long sessions should NOT warn about quality dropping — that was based on process grades."""
         snap = LiveSnapshot(tool_calls=20, duration_seconds=8000)
         nudges = _generate_nudges(snap)
-        assert any("min" in n.message for n in nudges)
+        assert not any("quality" in n.message.lower() for n in nudges)
 
     def test_clean_session_no_warn_nudges(self):
         snap = LiveSnapshot(tool_calls=10, test_runs=0)
@@ -130,13 +131,14 @@ class TestGenerateNudges:
         nudges = _generate_nudges(snap)
         assert any("looking good" in n.message.lower() for n in nudges)
 
-    def test_spec_dump_nudge(self):
+    def test_spec_dump_no_false_nudge(self):
+        """Spec Dump nudge removed — skill expansions inflate word counts, making short commands look like specs."""
         snap = LiveSnapshot(
             tool_calls=20,
             archetype="Spec Dump",
         )
         nudges = _generate_nudges(snap)
-        assert any("shorter" in n.message.lower() for n in nudges)
+        assert not any("shorter" in n.message.lower() for n in nudges)
 
 
 class TestSnapshot:
