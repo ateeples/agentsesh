@@ -254,11 +254,13 @@ def draw_sessions(
 
 def draw_details(
     win, y: int, x: int, width: int, height: int,
-    session: dict | None, tool_calls: list[dict], patterns: list[dict]
+    session: dict | None, tool_calls: list[dict], patterns: list[dict],
+    analysis=None,
 ) -> None:
     """Draw the session details panel.
 
-    Shows detailed info about the currently selected session.
+    Shows detailed info about the currently selected session,
+    including outcome grade, commits, tests, and collaboration.
     """
     draw_box(win, y, x, height, width, "Details")
 
@@ -277,9 +279,52 @@ def draw_details(
         safe_addstr(win, y + 1 + row, x + 3 + len(label) + 2, value, value_attr or dim_attr())
         row += 1
 
-    grade = session.get("grade", "?") or "?"
-    score = session.get("score", 0) or 0
-    add_line("Grade", f"{grade} ({score}/100)", grade_color(grade))
+    def add_raw(text: str, attr: int = 0) -> None:
+        nonlocal row
+        if row >= available_rows:
+            return
+        safe_addstr(win, y + 1 + row, x + 3, truncate(text, width - 6), attr or dim_attr())
+        row += 1
+
+    # Outcome + Process grades side by side (if analysis available)
+    if analysis and hasattr(analysis, "outcome") and analysis.outcome:
+        o = analysis.outcome
+        p_grade = session.get("grade", "?") or "?"
+        p_score = session.get("score", 0) or 0
+        o_grade = o.grade or "N/A"
+        o_score = o.score if o.score is not None else 0
+
+        # Outcome grade
+        label = "Outcome"
+        safe_addstr(win, y + 1 + row, x + 3, f"{label}: ", dim_attr())
+        o_str = f"{o_grade} ({o_score}/100)" if o_grade != "N/A" else "N/A"
+        safe_addstr(win, y + 1 + row, x + 3 + len(label) + 2, o_str, grade_color(o_grade))
+        # Process grade on same line
+        sep_x = x + 3 + len(label) + 2 + len(o_str) + 2
+        if sep_x + 20 < x + width:
+            safe_addstr(win, y + 1 + row, sep_x, "Process: ", dim_attr())
+            safe_addstr(win, y + 1 + row, sep_x + 9, f"{p_grade} ({p_score}/100)", grade_color(p_grade))
+        row += 1
+
+        # Commits
+        if o.commit_count > 0:
+            style = f" ({o.commit_style})" if o.commit_style and o.commit_style != "none" else ""
+            add_line("Commits", f"{o.commit_count}{style}", curses.color_pair(1))
+
+        # Tests
+        if o.test_snapshots:
+            last = o.test_snapshots[-1]
+            passed = getattr(last, "passed", 0) or 0
+            failed = getattr(last, "failed", 0) or 0
+            if failed > 0:
+                add_line("Tests", f"{passed} pass, {failed} FAIL", curses.color_pair(4))
+            else:
+                add_line("Tests", f"{passed} passing", curses.color_pair(1))
+    else:
+        # Fallback: just process grade
+        grade = session.get("grade", "?") or "?"
+        score = session.get("score", 0) or 0
+        add_line("Grade", f"{grade} ({score}/100)", grade_color(grade))
 
     duration = session.get("duration_minutes")
     if duration is not None:
@@ -307,14 +352,22 @@ def draw_details(
     if files_touched:
         add_line("Files", f"{len(files_touched)} touched")
 
-    # Model
-    model = session.get("model")
-    if model:
-        add_line("Model", truncate(model, width - 12))
+    # Collaboration (if analysis available)
+    if analysis and hasattr(analysis, "collaboration") and analysis.collaboration:
+        c = analysis.collaboration
+        if c.human_turns >= 2 and c.archetype:
+            if row < available_rows:
+                row += 1  # blank line
+            arch_color = curses.color_pair(1) if c.archetype == "Partnership" else (
+                curses.color_pair(4) if c.archetype in ("Spec Dump", "Micromanager") else dim_attr()
+            )
+            add_line("Collab", f"{c.archetype} ({c.score}/100)", arch_color)
+            corr = f"{c.corrections}c" if c.corrections else "0c"
+            aff = f"{c.affirmations}a" if c.affirmations else "0a"
+            add_raw(f"  {corr} {aff}  ~{c.avg_words_per_turn:.0f} words/turn", dim_attr())
 
     # Patterns
     if patterns:
-        # Count by type
         pattern_counts: dict[str, int] = {}
         for p in patterns:
             pt = p.get("type", "unknown")
@@ -328,9 +381,6 @@ def draw_details(
                 break
             safe_addstr(win, y + 1 + row, x + 3, f"  {pt} ({cnt})", curses.color_pair(3))
             row += 1
-    elif row < available_rows:
-        row += 1
-        safe_addstr(win, y + 1 + row, x + 3, "No patterns", curses.color_pair(1))
 
     # Session ID at the bottom if space permits
     if row + 1 < available_rows:

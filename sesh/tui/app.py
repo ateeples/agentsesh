@@ -38,6 +38,8 @@ class TuiApp:
         self.selected_session: dict | None = None
         self.selected_tool_calls: list[dict] = []
         self.selected_patterns: list[dict] = []
+        self.selected_analysis: object | None = None  # AnalysisResult cache
+        self._analysis_cache: dict[str, object] = {}  # sid -> AnalysisResult
 
         # Live state
         self.live_snapshot: LiveSnapshot | None = None
@@ -72,11 +74,12 @@ class TuiApp:
             self.last_live_refresh = time.time()
 
     def _load_selected_details(self) -> None:
-        """Load tool calls and patterns for the currently selected session."""
+        """Load tool calls, patterns, and outcome/collab for the currently selected session."""
         if not self.db:
             self.selected_session = None
             self.selected_tool_calls = []
             self.selected_patterns = []
+            self.selected_analysis = None
             return
 
         if self.sessions and 0 <= self.selected < len(self.sessions):
@@ -84,10 +87,28 @@ class TuiApp:
             self.selected_session = self.db.get_session(sid)
             self.selected_tool_calls = self.db.get_tool_calls(sid)
             self.selected_patterns = self.db.get_patterns(sid)
+
+            # Load full analysis (cached) for outcome + collaboration
+            if sid in self._analysis_cache:
+                self.selected_analysis = self._analysis_cache[sid]
+            else:
+                self.selected_analysis = None
+                source_path = self.selected_session.get("source_path") if self.selected_session else None
+                if source_path:
+                    from pathlib import Path
+                    p = Path(source_path)
+                    if p.exists():
+                        try:
+                            from ..analyze import analyze_session
+                            self.selected_analysis = analyze_session(p)
+                            self._analysis_cache[sid] = self.selected_analysis
+                        except Exception:
+                            pass
         else:
             self.selected_session = None
             self.selected_tool_calls = []
             self.selected_patterns = []
+            self.selected_analysis = None
 
     def move_selection(self, delta: int) -> None:
         """Move the session selection by delta rows."""
@@ -210,6 +231,7 @@ class TuiApp:
         draw_details(
             stdscr, start_y + patterns_h, left_w, right_w, details_h,
             self.selected_session, self.selected_tool_calls, self.selected_patterns,
+            self.selected_analysis,
         )
 
     def _render_narrow(self, stdscr, start_y: int, max_y: int, max_x: int) -> None:
@@ -240,6 +262,7 @@ class TuiApp:
         draw_details(
             stdscr, start_y + trend_h + sessions_h, 0, width, details_h,
             self.selected_session, self.selected_tool_calls, self.selected_patterns,
+            self.selected_analysis,
         )
 
 
