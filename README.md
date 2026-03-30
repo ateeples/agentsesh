@@ -178,6 +178,14 @@ cd agentsesh
 pip install -e .
 ```
 
+## Learn more
+
+AgentSesh measures what *Practices for Agents* describes — the behavioral patterns that determine whether AI coding sessions ship or churn. The book covers the research behind the collaboration analysis, the 84% gap, and why process grades are anti-correlated with shipping.
+
+- **[Practices for Agents](https://boldfaceline.com/book)** — the book. Free to read online, PDF+EPUB available.
+- **[agent-in-a-box](https://github.com/ateeples/agent-in-a-box)** — starter kit with brain, identity, and practices for persistent agents.
+- **[Bold Face Line](https://boldfaceline.com)** — essays on agent cognition and self-observability.
+
 ## License
 
 MIT

@@ -35,6 +35,8 @@ sesh-web = "sesh.web.server:main"
 [project.urls]
 Homepage = "https://agentsesh.com"
 Repository = "https://github.com/ateeples/agentsesh"
+Documentation = "https://boldfaceline.com/book"
+Blog = "https://boldfaceline.com"
 
 [tool.setuptools.packages.find]
 include = ["sesh*"]
